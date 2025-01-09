@@ -32,6 +32,7 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
+        sudo apt-get install curl 
         cmake -B build
         cmake --build build
     - name: Free disk space
