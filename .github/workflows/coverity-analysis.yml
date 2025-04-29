@@ -42,7 +42,7 @@ jobs:
         run: |
           sudo apt-get install -y libcurl4-openssl-dev libtoml11-dev libyaml-cpp-dev libquickjs cron
           cmake -B build
-          coverity_tool/bin/cov-build --dir cov-int cmake --build build || true
+          coverity_tool/bin/cov-build --dir cov-int scripts/build.alpine.release.sh || true
       - name: Compress with bzip2
         run: |
           tar cjvf myproject.tar.bz2 cov-int
