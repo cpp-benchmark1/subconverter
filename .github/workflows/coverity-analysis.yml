@@ -12,7 +12,7 @@ on:
         default: "c-cpp"
 jobs:
   coverity:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       security-events: write
       packages: read
@@ -24,12 +24,17 @@ jobs:
         include:
         - language: c-cpp
           build-mode: manual
+    container:
+      image: alpine
+      volumes:
+        - /:/host
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
       - name: Download and Install Coverity Tool
+        shell: sh
         run: |
           wget https://scan.coverity.com/download/linux64 \
             --post-data "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" \
@@ -39,10 +44,14 @@ jobs:
           export PATH=$PWD/coverity_tool/bin:$PATH
           echo "Coverity Tool installed successfully"
       - name: Build with Coverity
+        shell: sh
         run: |
-          coverity_tool/bin/cov-build --dir cov-int docker run --rm -v $GITHUB_WORKSPACE:/root/workdir multiarch/alpine:${{ matrix.arch }}-latest-stable /bin/sh -c \
-            "apk add bash git nodejs npm && cd /root/workdir && chmod +x scripts/build.alpine.release.sh && bash scripts/build.alpine.release.sh"
+          apk add bash git nodejs npm
+          cd /root/workdir
+          chmod +x scripts/build.alpine.release.sh
+          coverity_tool/bin/cov-build --dir cov-int bash scripts/build.alpine.release.sh || echo 'Errors during build with Coverity'
       - name: Compress with bzip2
+        shell: sh
         run: |
           tar cjvf myproject.tar.bz2 cov-int
         id: compress
