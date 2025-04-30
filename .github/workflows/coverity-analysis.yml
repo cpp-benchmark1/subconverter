@@ -37,6 +37,7 @@ jobs:
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
           Write-Output "Coverity Tool installed successfully"
       - name: Build with Coverity
+        shell: bash
         run: |
           cov-analysis-win64-2024.6.1/bin/cov-build.exe --dir cov-int scripts/build.windows.release.sh
       - name: Compress with bzip2
