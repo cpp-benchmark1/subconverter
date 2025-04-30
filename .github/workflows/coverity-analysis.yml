@@ -39,7 +39,7 @@ jobs:
       - name: Build with Coverity
         shell: bash
         run: |
-          cov-analysis-win64-2024.6.1/bin/cov-build.exe --dir cov-int scripts/build.windows.release.sh
+          cov-analysis-win64-2024.6.1/bin/cov-build.exe --dir cov-int bash -c scripts/build.windows.release.sh
       - name: Compress with bzip2
         run: |
           Compress-Archive -Path cov-int -DestinationPath myproject.zip
