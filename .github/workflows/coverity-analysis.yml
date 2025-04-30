@@ -51,7 +51,9 @@ jobs:
         shell: sh
         run: |
           chmod +x scripts/build.alpine.release.sh
-          cov-analysis-linux64-2024.6.1/bin/cov-build --dir cov-int bash scripts/build.alpine.release.sh || echo 'Errors during build with Coverity'
+          ls ./cov-analysis-linux64-2024.6.1
+          ls ./cov-analysis-linux64-2024.6.1/bin/
+          ./cov-analysis-linux64-2024.6.1/bin/cov-build --dir cov-int bash scripts/build.alpine.release.sh || echo 'Errors during build with Coverity'
       - name: Compress with bzip2
         shell: sh
         run: |
