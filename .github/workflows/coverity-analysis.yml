@@ -32,7 +32,7 @@ jobs:
       - name: Installing dependencies
         shell: sh
         run: |
-          apk add bash git nodejs npm gcompat gcc libstdc++ libpthread
+          apk add bash git nodejs npm gcompat gcc libstdc++ libpthread-stubs-0.3-r5
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
