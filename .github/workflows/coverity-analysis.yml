@@ -32,7 +32,7 @@ jobs:
       - name: Installing dependencies
         shell: sh
         run: |
-          apk add bash git nodejs npm gcompat
+          apk add bash git nodejs npm gcompat gcc
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -51,7 +51,7 @@ jobs:
         shell: sh
         run: |
           chmod +x scripts/build.alpine.release.sh
-          ./cov-analysis-linux64-2024.6.1/bin/cov-configure --compiler /usr/bin/gcc --comptype gcc
+          ./cov-analysis-linux64-2024.6.1/bin/cov-configure --gcc
           ./cov-analysis-linux64-2024.6.1/bin/cov-build --dir cov-int ./scripts/build.alpine.release.sh || echo 'Errors during build with Coverity'
       - name: Compress with bzip2
         shell: sh
