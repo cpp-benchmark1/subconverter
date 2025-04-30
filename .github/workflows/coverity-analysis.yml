@@ -44,14 +44,14 @@ jobs:
             --post-data "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" \
             -O coverity_tool.tgz
           mkdir coverity_tool
-          tar -xvzf coverity_tool.tgz -C coverity_tool --strip-components=1
-          export PATH=$PWD/coverity_tool/bin:$PATH
+          tar -xvzf coverity_tool.tgz
+          export PATH=$PWD/cov-analysis-linux64-2024.6.1/bin:$PATH
           echo "Coverity Tool installed successfully"
       - name: Build with Coverity
         shell: sh
         run: |
           chmod +x scripts/build.alpine.release.sh
-          coverity_tool/bin/cov-build --dir cov-int bash scripts/build.alpine.release.sh || echo 'Errors during build with Coverity'
+          cov-analysis-linux64-2024.6.1/bin/cov-build --dir cov-int bash scripts/build.alpine.release.sh || echo 'Errors during build with Coverity'
       - name: Compress with bzip2
         shell: sh
         run: |
