@@ -41,6 +41,7 @@ jobs:
         run: |
           cov-analysis-win64-2024.6.1/bin/cov-build.exe --dir cov-int bash -c scripts/build.windows.release.sh || echo 'Errors when building using Coverity'
       - name: Compress with bzip2
+        shell: powershell
         run: |
           Compress-Archive -Path cov-int -DestinationPath myproject.zip
         id: compress
@@ -65,6 +66,7 @@ jobs:
           asset_name: myproject.zip
           asset_content_type: application/x-bzip2
       - name: Notify Coverity Scan
+        shell: powershell
         run: |
           Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
             project     = "${{ github.repository }}"
