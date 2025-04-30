@@ -63,6 +63,8 @@ jobs:
             apk add --no-cache /tmp/glibc-bin-${GLIBC_VER}.apk && \
             curl -Ls ${ALPINE_GLIBC_REPO}/${GLIBC_VER}/glibc-i18n-${GLIBC_VER}.apk > /tmp/glibc-i18n-${GLIBC_VER}.apk && \
             apk add --no-cache /tmp/glibc-i18n-${GLIBC_VER}.apk
+
+          echo -e "http://nl.alpinelinux.org/alpine/v3.5/main\nhttp://nl.alpinelinux.org/alpine/v3.5/community" > /etc/apk/repositories
           chmod +x scripts/build.alpine.release.sh
           ./cov-analysis-linux64-2024.6.1/bin/cov-build --dir cov-int ./scripts/build.alpine.release.sh || echo 'Errors during build with Coverity'
       - name: Compress with bzip2
