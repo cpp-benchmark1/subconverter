@@ -32,7 +32,8 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-          scripts/build.windows.release.sh
+        choco install pkgconfiglite
+        scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
       with:
