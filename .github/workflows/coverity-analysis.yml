@@ -12,7 +12,7 @@ on:
         default: "c-cpp"
 jobs:
   coverity:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
     permissions:
       security-events: write
       packages: read
