@@ -36,11 +36,12 @@ jobs:
           unzip coverity_tool.zip
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
           Write-Output "Coverity Tool installed successfully"
+          New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
       - name: Build with Coverity
         shell: bash
         run: |
           choco install pkgconfiglite curl
-          cov-analysis-win64-2024.6.1/bin/cov-build.exe --dir cov-int bash -c scripts/build.windows.release.sh || echo 'Errors when building using Coverity'
+          cov-analysis-win64-2024.6.1/bin/cov-build.exe --dir cov-int bash scripts/build.windows.release.sh || echo 'Errors when building using Coverity'
       - name: Compress with bzip2
         shell: powershell
         run: |
