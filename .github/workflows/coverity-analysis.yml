@@ -40,7 +40,7 @@ jobs:
       - name: Build with Coverity
         shell: bash
         run: |
-          vcpkg.exe install --triplet x64-windows libcurl pkgconf
+          vcpkg.exe install --triplet x64-windows pkgconf curl
           cov-analysis-win64-2024.6.1/bin/cov-build.exe --dir cov-int bash -c "scripts/build.windows.release.sh || echo 'Errors when building using Coverity'"
       - name: Compress with bzip2
         shell: powershell
