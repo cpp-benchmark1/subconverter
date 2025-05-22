@@ -32,7 +32,56 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        vcpkg.exe install pkgconf curl:x64-windows
+        git clone https://github.com/microsoft/vcpkg.git
+        ./vcpkg/bootstrap-vcpkg.bat
+        ./vcpkg/vcpkg.exe install pkgconf curl:x64-windows
+
+        export PATH="$(pwd)/vcpkg/installed/x64-windows/tools/pkgconf:$PATH"
+        INCLUDE_DIR="$(pwd)/vcpkg/installed/x64-windows/include"
+        LIB_DIR="$(pwd)/vcpkg/installed/x64-windows/lib"
+
+        echo "CURL_INCLUDE_DIR:PATH=$INCLUDE_DIR" > CMakeCache.txt
+        echo "CURL_LIBRARY:FILEPATH=$LIB_DIR/libcurl.lib" >> CMakeCache.txt
+
+        TOML11_DIR="$(pwd)/vcpkg/installed/x64-windows/share/toml11"
+        mkdir -p "$TOML11_DIR"
+        echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$TOML11_DIR/toml11Config.cmake"
+        echo 'set(toml11_INCLUDE_DIR "${_dir}/../../include")' >> "$TOML11_DIR/toml11Config.cmake"
+
+        YAML_CPP_PC_DIR="$(pwd)/vcpkg/installed/x64-windows/lib/pkgconfig"
+        mkdir -p "$YAML_CPP_PC_DIR"
+        echo "prefix=$(pwd)/vcpkg/installed/x64-windows" > "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+        echo "exec_prefix=\${prefix}" >> "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+        echo "includedir=\${prefix}/include" >> "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+        echo "libdir=\${prefix}/lib" >> "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+        echo "" >> "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+        echo "Name: yaml-cpp" >> "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+        echo "Description: YAML parser and emitter in C++" >> "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+        echo "Version: 0.6.3" >> "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+        echo "Cflags: -I\${includedir}" >> "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+        echo "Libs: -L\${libdir} -lyaml-cpp" >> "$YAML_CPP_PC_DIR/yaml-cpp.pc"
+
+        RAPIDJSON_DIR="$(pwd)/vcpkg/installed/x64-windows/share/rapidjson"
+        mkdir -p "$RAPIDJSON_DIR"
+        echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$RAPIDJSON_DIR/RapidjsonConfig.cmake"
+        echo 'set(RAPIDJSON_INCLUDE_DIRS "${_dir}/../../include")' >> "$RAPIDJSON_DIR/RapidjsonConfig.cmake"
+        
+        echo "PCRE2_INCLUDE_DIR:PATH=$INCLUDE_DIR" >> CMakeCache.txt
+        echo "PCRE2_LIBRARY:FILEPATH=$LIB_DIR/libpcre2-8.a" >> CMakeCache.txt
+
+        echo "QUICKJS_INCLUDE_DIRS:PATH=$INCLUDE_DIR/quickjs" >> CMakeCache.txt
+        echo "QUICKJS_LIBRARY:FILEPATH=$LIB_DIR/quickjs/libquickjs.a" >> CMakeCache.txt
+
+        mkdir -p "$INCLUDE_DIR/libcron"
+        echo "// fake libcron header to satisfy FindLibCron" > "$INCLUDE_DIR/libcron/libcron.hpp"
+
+        export LIBCRON_INCLUDE_DIRS="$INCLUDE_DIR"
+        echo "LIBCRON_LIBRARY:FILEPATH=$LIB_DIR/libcron_static.a" >> CMakeCache.txt
+
+        export CMAKE_PREFIX_PATH="$(pwd)/vcpkg/installed/x64-windows"
+        export PKG_CONFIG_PATH="$YAML_CPP_PC_DIR"
+
+        cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -DLIBCRON_INCLUDE_DIRS="$INCLUDE_DIR" -DLIBCRON_LIBRARY="$LIB_DIR/libcron_static.a" .
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
