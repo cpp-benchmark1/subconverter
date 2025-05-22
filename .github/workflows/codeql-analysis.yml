@@ -72,7 +72,9 @@ jobs:
         echo "QUICKJS_INCLUDE_DIRS:PATH=$INCLUDE_DIR/quickjs" >> CMakeCache.txt
         echo "QUICKJS_LIBRARY:FILEPATH=$LIB_DIR/quickjs/libquickjs.a" >> CMakeCache.txt
 
-        echo "// fake libcron header to satisfy FindLibCron" > "$INCLUDE_DIR/libcron.hpp"
+        mkdir -p "$INCLUDE_DIR/libcron"
+        echo "// fake libcron header to satisfy FindLibCron" > "$INCLUDE_DIR/libcron/libcron.hpp"
+
         export LIBCRON_INCLUDE_DIRS="$INCLUDE_DIR"
         echo "LIBCRON_LIBRARY:FILEPATH=$LIB_DIR/libcron_static.a" >> CMakeCache.txt
 
