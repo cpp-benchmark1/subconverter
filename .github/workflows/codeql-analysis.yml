@@ -45,11 +45,12 @@ jobs:
 
         TOML11_DIR="$(pwd)/vcpkg/installed/x64-windows/share/toml11"
         mkdir -p "$TOML11_DIR"
-        
+
         echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$TOML11_DIR/toml11Config.cmake"
         echo 'set(toml11_INCLUDE_DIR "${_dir}/../../include")' >> "$TOML11_DIR/toml11Config.cmake"
 
         export CMAKE_PREFIX_PATH="$(pwd)/vcpkg/installed/x64-windows"
+        export PKG_CONFIG_PATH="$(pwd)/vcpkg/installed/x64-windows/lib/pkgconfig"
 
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
