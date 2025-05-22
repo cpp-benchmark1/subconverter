@@ -76,8 +76,8 @@ jobs:
         QUICKJS_DIR="$(pwd)/vcpkg/installed/x64-windows/share/quickjs"
         mkdir -p "$QUICKJS_DIR"
         echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$QUICKJS_DIR/QuickJSConfig.cmake"
-        echo 'set(QUICKJS_INCLUDE_DIRS "${_dir}/../../include/quickjs")' >> "$QUICKJS_DIR/QuickJSConfig.cmake"
-        echo 'set(QUICKJS_LIBRARIES "${_dir}/../../lib/quickjs/libquickjs.a")' >> "$QUICKJS_DIR/QuickJSConfig.cmake"
+        echo "QUICKJS_INCLUDE_DIRS:PATH=$INCLUDE_DIR/quickjs" >> CMakeCache.txt
+        echo "QUICKJS_LIBRARY:FILEPATH=$LIB_DIR/quickjs/libquickjs.a" >> CMakeCache.txt
 
         LIBCRON_DIR="$(pwd)/vcpkg/installed/x64-windows/share/libcron"
         mkdir -p "$LIBCRON_DIR"
