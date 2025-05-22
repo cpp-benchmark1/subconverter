@@ -32,8 +32,21 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        vcpkg.exe install pkgconf curl:x64-windows
+        git clone https://github.com/microsoft/vcpkg.git
+        ./vcpkg/bootstrap-vcpkg.bat
+        ./vcpkg/vcpkg.exe install pkgconf curl:x64-windows
+        export PATH="$(pwd)/vcpkg/installed/x64-windows/tools/pkgconf:$PATH"
         scripts/build.windows.release.sh
+    - name: Reconfigure projeto com vcpkg toolchain
+      if: matrix.build-mode == 'manual'
+      shell: bash
+      run: |
+        export VCPKG_ROOT=$PWD/vcpkg
+        export CMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+        export PATH="$VCPKG_ROOT:$PATH"
+
+        cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" .
+        make -j4
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
       with:
