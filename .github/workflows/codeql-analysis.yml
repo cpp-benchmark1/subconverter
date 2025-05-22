@@ -70,7 +70,7 @@ jobs:
         PCRE2_DIR="$(pwd)/vcpkg/installed/x64-windows/share/pcre2"
         mkdir -p "$PCRE2_DIR"
         echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$PCRE2_DIR/PCRE2Config.cmake"
-        echo 'set(PCRE2_INCLUDE_DIRS "${_dir}/../../include")' >> "$PCRE2_DIR/PCRE2Config.cmake"
+        echo 'set(PCRE2_INCLUDE_DIR "${_dir}/../../include")' >> "$PCRE2_DIR/PCRE2Config.cmake"
         echo 'set(PCRE2_LIBRARY "${_dir}/../../lib/libpcre2-8.a")' >> "$PCRE2_DIR/PCRE2Config.cmake"
 
         QUICKJS_DIR="$(pwd)/vcpkg/installed/x64-windows/share/quickjs"
