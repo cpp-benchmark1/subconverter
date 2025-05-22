@@ -35,6 +35,7 @@ jobs:
         git clone https://github.com/microsoft/vcpkg.git
         ./vcpkg/bootstrap-vcpkg.bat
         ./vcpkg/vcpkg.exe install pkgconf curl:x64-windows
+        export PATH="$(pwd)/vcpkg/installed/x64-windows/tools/pkgconf:$PATH"
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
