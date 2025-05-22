@@ -45,6 +45,7 @@ jobs:
         echo "CURL_LIBRARY:FILEPATH=$LIB_DIR/libcurl.lib" >> CMakeCache.txt
 
         export CMAKE_PREFIX_PATH="$(pwd)/vcpkg/installed/x64-windows"
+        export toml11_DIR="$(pwd)/vcpkg/installed/x64-windows/share/toml11"
 
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
