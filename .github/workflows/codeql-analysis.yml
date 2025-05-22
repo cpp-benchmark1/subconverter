@@ -38,8 +38,11 @@ jobs:
 
         export PATH="$(pwd)/vcpkg/installed/x64-windows/tools/pkgconf:$PATH"
 
-        export CURL_INCLUDE_DIR="$(pwd)/vcpkg/installed/x64-windows/include"
-        export CURL_LIBRARY="$(pwd)/vcpkg/installed/x64-windows/lib/libcurl.lib"
+        INCLUDE_DIR="$(pwd)/vcpkg/installed/x64-windows/include"
+        LIB_DIR="$(pwd)/vcpkg/installed/x64-windows/lib"
+
+        echo "CURL_INCLUDE_DIR:PATH=$INCLUDE_DIR" > CMakeCache.txt
+        echo "CURL_LIBRARY:FILEPATH=$LIB_DIR/libcurl.lib" >> CMakeCache.txt
 
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
