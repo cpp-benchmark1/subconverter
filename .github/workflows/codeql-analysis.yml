@@ -83,8 +83,8 @@ jobs:
         mkdir -p "$LIBCRON_DIR"
         echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$LIBCRON_DIR/LibCronConfig.cmake"
         echo 'set(LIBCRON_INCLUDE_DIRS "${_dir}/../../include")' >> "$LIBCRON_DIR/LibCronConfig.cmake"
-        echo 'set(LIBCRON_LIBRARIES "${_dir}/../../lib/libcron.a")' >> "$LIBCRON_DIR/LibCronConfig.cmake"
-        
+        echo 'set(LIBCRON_LIBRARIES "${_dir}/../../lib/libcron_static.a")' >> "$LIBCRON_DIR/LibCronConfig.cmake"
+
         export CMAKE_PREFIX_PATH="$(pwd)/vcpkg/installed/x64-windows"
         export PKG_CONFIG_PATH="$YAML_CPP_PC_DIR"
 
