@@ -32,7 +32,20 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        vcpkg.exe install pkgconf curl:x64-windows
+        git clone https://github.com/microsoft/vcpkg.git
+        ./vcpkg/bootstrap-vcpkg.bat
+        ./vcpkg/vcpkg.exe install pkgconf curl:x64-windows
+
+        export PATH="$(pwd)/vcpkg/installed/x64-windows/tools/pkgconf:$PATH"
+
+        INCLUDE_DIR="$(pwd)/vcpkg/installed/x64-windows/include"
+        LIB_DIR="$(pwd)/vcpkg/installed/x64-windows/lib"
+
+        echo "CURL_INCLUDE_DIR:PATH=$INCLUDE_DIR" > CMakeCache.txt
+        echo "CURL_LIBRARY:FILEPATH=$LIB_DIR/libcurl.lib" >> CMakeCache.txt
+
+        export CMAKE_PREFIX_PATH="$(pwd)/vcpkg/installed/x64-windows"
+
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
