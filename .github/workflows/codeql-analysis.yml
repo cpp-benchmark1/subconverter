@@ -58,6 +58,7 @@ jobs:
         mkdir -p "$RAPIDJSON_DIR"
         echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$RAPIDJSON_DIR/RapidjsonConfig.cmake"
         echo 'set(RAPIDJSON_INCLUDE_DIRS "${_dir}/../../include")' >> "$RAPIDJSON_DIR/RapidjsonConfig.cmake"
+        echo "RAPIDJSON_INCLUDE_DIRS:PATH=$INCLUDE_DIR" >> CMakeCache.txt
 
         echo "PCRE2_INCLUDE_DIR:PATH=$INCLUDE_DIR" >> CMakeCache.txt
         echo "PCRE2_LIBRARY:FILEPATH=$LIB_DIR/libpcre2-8.a" >> CMakeCache.txt
