@@ -72,10 +72,14 @@ jobs:
         echo "QUICKJS_INCLUDE_DIRS:PATH=$INCLUDE_DIR/quickjs" >> CMakeCache.txt
         echo "QUICKJS_LIBRARY:FILEPATH=$LIB_DIR/quickjs/libquickjs.a" >> CMakeCache.txt
 
-        mkdir -p "$INCLUDE_DIR/libcron"
-        echo "// dummy libcron header" > "$INCLUDE_DIR/libcron/libcron.hpp"
-        echo "LIBCRON_INCLUDE_DIRS:PATH=$INCLUDE_DIR" >> CMakeCache.txt
-        echo "LIBCRON_LIBRARY:FILEPATH=$LIB_DIR/libcron.a" >> CMakeCache.txt
+        LIBCRON_DIR="$(pwd)/vcpkg/installed/x64-windows"
+        mkdir -p "$LIBCRON_DIR/share/libcron"
+        mkdir -p "$LIBCRON_DIR/include/libcron"
+        echo "// dummy header" > "$LIBCRON_DIR/include/libcron/libcron.hpp"
+
+        echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$LIBCRON_DIR/share/libcron/LibCronConfig.cmake"
+        echo 'set(LIBCRON_INCLUDE_DIRS "${_dir}/../../include/libcron")' >> "$LIBCRON_DIR/share/libcron/LibCronConfig.cmake"
+        echo 'set(LIBCRON_LIBRARY "${_dir}/../../lib/libcron_static.a")' >> "$LIBCRON_DIR/share/libcron/LibCronConfig.cmake"
 
         export CMAKE_PREFIX_PATH="$(pwd)/vcpkg/installed/x64-windows"
         export PKG_CONFIG_PATH="$YAML_CPP_PC_DIR"
