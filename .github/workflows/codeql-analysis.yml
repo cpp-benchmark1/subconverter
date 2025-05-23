@@ -73,16 +73,12 @@ jobs:
         echo "QUICKJS_LIBRARY:FILEPATH=$LIB_DIR/quickjs/libquickjs.a" >> CMakeCache.txt
 
         mkdir -p "$INCLUDE_DIR/libcron"
-        echo "// fake libcron header to satisfy FindLibCron" > "$INCLUDE_DIR/libcron/libcron.hpp"
-
-        echo "LIBCRON_INCLUDE_DIRS:PATH=$INCLUDE_DIR" >> CMakeCache.txt
-        echo "LIBCRON_LIBRARY:FILEPATH=$LIB_DIR/libcron_static.a" >> CMakeCache.txt
+        echo "// fake libcron header" > "$INCLUDE_DIR/libcron/libcron.hpp"
 
         export CMAKE_PREFIX_PATH="$(pwd)/vcpkg/installed/x64-windows"
         export PKG_CONFIG_PATH="$YAML_CPP_PC_DIR"
 
-        cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -DLIBCRON_INCLUDE_DIRS="$INCLUDE_DIR/libcron" -DLIBCRON_LIBRARY="$LIB_DIR/libcron_static.a" .
-
+        cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" .
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
