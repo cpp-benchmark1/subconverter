@@ -81,7 +81,8 @@ jobs:
         export CMAKE_PREFIX_PATH="$(pwd)/vcpkg/installed/x64-windows"
         export PKG_CONFIG_PATH="$YAML_CPP_PC_DIR"
 
-        cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -DLIBCRON_INCLUDE_DIRS="$INCLUDE_DIR" -DLIBCRON_LIBRARY="$LIB_DIR/libcron_static.a" .
+        cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -DLIBCRON_INCLUDE_DIRS="$INCLUDE_DIR/libcron" -DLIBCRON_LIBRARY="$LIB_DIR/libcron_static.a" .
+
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
