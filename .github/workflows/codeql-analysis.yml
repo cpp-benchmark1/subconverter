@@ -34,7 +34,13 @@ jobs:
       run: |
         git clone https://github.com/microsoft/vcpkg.git
         ./vcpkg/bootstrap-vcpkg.bat
-        ./vcpkg/vcpkg.exe install pkgconf curl:x64-windows yaml-cpp:x64-windows quickjs:x64-windows
+        ./vcpkg/vcpkg.exe install pkgconf curl:x64-windows yaml-cpp:x64-windows
+
+        QUICKJS_DIR="$(pwd)/vcpkg/installed/x64-windows/share/quickjs"
+        mkdir -p "$QUICKJS_DIR"
+        echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$QUICKJS_DIR/QuickJSConfig.cmake"
+        echo 'set(QUICKJS_INCLUDE_DIRS "${_dir}/../../include/quickjs")' >> "$QUICKJS_DIR/QuickJSConfig.cmake"
+        echo 'set(QUICKJS_LIBRARIES "${_dir}/../../lib/quickjs/libquickjs.a")' >> "$QUICKJS_DIR/QuickJSConfig.cmake"
 
         export PATH="$(pwd)/vcpkg/installed/x64-windows/tools/pkgconf:$PATH"
         INCLUDE_DIR="$(pwd)/vcpkg/installed/x64-windows/include"
