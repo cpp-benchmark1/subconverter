@@ -66,6 +66,9 @@ jobs:
         echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$RAPIDJSON_DIR/RapidjsonConfig.cmake"
         echo 'set(RAPIDJSON_INCLUDE_DIRS "${_dir}/../../include")' >> "$RAPIDJSON_DIR/RapidjsonConfig.cmake"
         
+        echo "RAPIDJSON_INCLUDE_DIRS:PATH=$INCLUDE_DIR" >> CMakeCache.txt
+        echo "YAML_CPP_LIBRARY:FILEPATH=$LIB_DIR/yaml-cpp.lib" >> CMakeCache.txt
+        
         echo "PCRE2_INCLUDE_DIR:PATH=$INCLUDE_DIR" >> CMakeCache.txt
         echo "PCRE2_LIBRARY:FILEPATH=$LIB_DIR/libpcre2-8.a" >> CMakeCache.txt
 
@@ -74,16 +77,12 @@ jobs:
 
         LIBCRON_FAKE_DIR="$(pwd)/vcpkg/installed/x64-windows/include"
         LIBCRON_FAKE_LIB="$(pwd)/vcpkg/installed/x64-windows/lib"
-
         mkdir -p "$LIBCRON_FAKE_DIR/libcron"
         echo "// dummy Cron.h" > "$LIBCRON_FAKE_DIR/libcron/Cron.h"
-
         mkdir -p "$LIBCRON_FAKE_DIR/date"
         echo "// dummy date.h" > "$LIBCRON_FAKE_DIR/date/date.h"
-
         mkdir -p "$LIBCRON_FAKE_LIB"
         echo "" > "$LIBCRON_FAKE_LIB/libcron.a"
-
         echo "LIBCRON_INCLUDE_DIR:PATH=$LIBCRON_FAKE_DIR/libcron" >> CMakeCache.txt
         echo "DATE_INCLUDE_DIR:PATH=$LIBCRON_FAKE_DIR/date" >> CMakeCache.txt
         echo "LIBCRON_LIBRARY:FILEPATH=$LIBCRON_FAKE_LIB/libcron.a" >> CMakeCache.txt
