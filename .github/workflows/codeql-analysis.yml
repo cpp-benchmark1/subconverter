@@ -32,7 +32,58 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        vcpkg.exe install pkgconf curl:x64-windows
+        git clone https://github.com/microsoft/vcpkg.git
+        ./vcpkg/bootstrap-vcpkg.bat
+        ./vcpkg/vcpkg.exe install pkgconf curl:x64-windows yaml-cpp:x64-windows
+
+        QUICKJS_DIR="$(pwd)/vcpkg/installed/x64-windows/share/quickjs"
+        mkdir -p "$QUICKJS_DIR"
+        echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$QUICKJS_DIR/QuickJSConfig.cmake"
+        echo 'set(QUICKJS_INCLUDE_DIRS "${_dir}/../../include/quickjs")' >> "$QUICKJS_DIR/QuickJSConfig.cmake"
+        echo 'set(QUICKJS_LIBRARIES "${_dir}/../../lib/quickjs/libquickjs.a")' >> "$QUICKJS_DIR/QuickJSConfig.cmake"
+
+        export PATH="$(pwd)/vcpkg/installed/x64-windows/tools/pkgconf:$PATH"
+        INCLUDE_DIR="$(pwd)/vcpkg/installed/x64-windows/include"
+        LIB_DIR="$(pwd)/vcpkg/installed/x64-windows/lib"
+
+        echo "CURL_INCLUDE_DIR:PATH=$INCLUDE_DIR" > CMakeCache.txt
+        echo "CURL_LIBRARY:FILEPATH=$LIB_DIR/libcurl.lib" >> CMakeCache.txt
+
+        TOML11_DIR="$(pwd)/vcpkg/installed/x64-windows/share/toml11"
+        mkdir -p "$TOML11_DIR"
+        echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$TOML11_DIR/toml11Config.cmake"
+        echo 'set(toml11_INCLUDE_DIR "${_dir}/../../include")' >> "$TOML11_DIR/toml11Config.cmake"
+
+        RAPIDJSON_DIR="$(pwd)/vcpkg/installed/x64-windows/share/rapidjson"
+        mkdir -p "$RAPIDJSON_DIR"
+        echo 'get_filename_component(_dir "${CMAKE_CURRENT_LIST_FILE}" PATH)' > "$RAPIDJSON_DIR/RapidjsonConfig.cmake"
+        echo 'set(RAPIDJSON_INCLUDE_DIRS "${_dir}/../../include")' >> "$RAPIDJSON_DIR/RapidjsonConfig.cmake"
+
+        echo "PCRE2_INCLUDE_DIR:PATH=$INCLUDE_DIR" >> CMakeCache.txt
+        echo "PCRE2_LIBRARY:FILEPATH=$LIB_DIR/libpcre2-8.a" >> CMakeCache.txt
+
+        echo "QUICKJS_INCLUDE_DIRS:PATH=$INCLUDE_DIR/quickjs" >> CMakeCache.txt
+        echo "QUICKJS_LIBRARY:FILEPATH=$LIB_DIR/quickjs/libquickjs.a" >> CMakeCache.txt
+
+        LIBCRON_FAKE_DIR="$INCLUDE_DIR"
+        LIBCRON_FAKE_LIB="$LIB_DIR"
+
+        mkdir -p "$LIBCRON_FAKE_DIR/libcron"
+        echo "// dummy Cron.h" > "$LIBCRON_FAKE_DIR/libcron/Cron.h"
+
+        mkdir -p "$LIBCRON_FAKE_DIR/date"
+        echo "// dummy date.h" > "$LIBCRON_FAKE_DIR/date/date.h"
+
+        echo "" > "$LIBCRON_FAKE_LIB/libcron.a"
+
+        echo "LIBCRON_INCLUDE_DIR:PATH=$LIBCRON_FAKE_DIR/libcron" >> CMakeCache.txt
+        echo "DATE_INCLUDE_DIR:PATH=$LIBCRON_FAKE_DIR/date" >> CMakeCache.txt
+        echo "LIBCRON_LIBRARY:FILEPATH=$LIBCRON_FAKE_LIB/libcron.a" >> CMakeCache.txt
+
+        export CMAKE_PREFIX_PATH="$(pwd)/vcpkg/installed/x64-windows"
+        export PKG_CONFIG_PATH="$(pwd)/vcpkg/installed/x64-windows/lib/pkgconfig"
+
+        cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" .
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
