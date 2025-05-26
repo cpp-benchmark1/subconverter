@@ -33,7 +33,7 @@ jobs:
       shell: bash
       run: |
         export CMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
-        vcpkg.exe install pkgconf curl:x64-windows zlib toml11 yaml-cpp
+        vcpkg.exe install pkgconf curl:x64-windows zlib toml11 yaml-cpp pcre2
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
