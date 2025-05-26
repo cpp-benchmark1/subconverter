@@ -34,9 +34,10 @@ jobs:
       run: |
         VCPKG_ROOT="$VCPKG_INSTALLATION_ROOT"
         PATH="$VCPKG_ROOT:$PATH"
-        choco install pkgconfiglite curl zlib
+        choco install pkgconfiglite curl
         vcpkg.exe install pkgconf
         vcpkg.exe install curl:x64-windows
+        vcpkg.exe install zlib
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
