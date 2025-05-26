@@ -32,12 +32,8 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        VCPKG_ROOT="$VCPKG_INSTALLATION_ROOT"
-        PATH="$VCPKG_ROOT:$PATH"
-        export CMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-        vcpkg.exe install pkgconf
-        vcpkg.exe install curl:x64-windows
-        vcpkg.exe install zlib
+        export CMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+        vcpkg.exe install pkgconf curl:x64-windows zlib toml11
         scripts/build.windows.release.sh
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
