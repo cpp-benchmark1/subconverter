@@ -32,7 +32,6 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        VCPKG_INSTALLATION_ROOT/bootstrap-vcpkg.sh
         VCPKG_ROOT="$VCPKG_INSTALLATION_ROOT"
         PATH="$VCPKG_ROOT:$PATH"
         vcpkg.exe install pkgconf curl:x64-windows
