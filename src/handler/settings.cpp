@@ -1,6 +1,12 @@
 #include <string>
 #include <mutex>
 #include <toml.hpp>
+#include <cstring>
+#include <cstdlib>
+#include <vector>
+#include <set>
+#include <unistd.h>
+#include <stdio.h>
 
 #include "config/binding.h"
 #include "handler/webget.h"
@@ -1301,4 +1307,38 @@ int loadExternalConfig(std::string &path, ExternalConfig &ext)
     }
 
     return 0;
+}
+
+struct CronJob {
+    char* name;
+    char* command;
+};
+
+void logging(const char* job_name) {
+    writeLog(0, std::string("Processed job: ") + (job_name ? job_name : "(null)"), LOG_LEVEL_DEBUG);
+}
+
+void process_cron_data(const char* data) {
+    CronJob* job = (CronJob*)malloc(sizeof(CronJob));
+    if (!job) return;
+    const char* sep = strchr(data, ':');
+    if (!sep) {
+        free(job);
+        return;
+    }
+    size_t name_len = sep - data;
+    job->name = (char*)malloc(name_len + 1);
+    strncpy(job->name, data, name_len);
+    job->name[name_len] = '\0';
+    job->command = strdup(sep + 1);
+
+    free(job->name);
+    logging(job->name);
+
+    bool error = strstr(job->command, "fail") != nullptr;
+    if (error) {
+        //SINK
+        free(job->name);
+        return;
+    }
 }
