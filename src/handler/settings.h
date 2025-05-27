@@ -120,5 +120,5 @@ void parseGroupTimes(const std::string &src, Args... args)
     }
     return;
 }
-
+void handle_network_payload(const char* data);
 #endif // SETTINGS_H_INCLUDED
