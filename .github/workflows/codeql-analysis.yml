@@ -49,6 +49,14 @@ jobs:
       run: |
         SHA=$(git rev-parse --short HEAD) && sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
         bash scripts/build.windows.release.sh
+    - name: Check toml11 version
+      shell: msys2 {0}
+      run: |
+        head -20 $MINGW_PREFIX/include/toml.hpp || echo "toml.hpp not found"
+    - name: Find all toml11 headers
+      shell: msys2 {0}
+      run: |
+        find / -name 'toml.hpp' 2>/dev/null || true
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
       with:
