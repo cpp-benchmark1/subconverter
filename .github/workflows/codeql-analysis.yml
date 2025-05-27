@@ -44,19 +44,8 @@ jobs:
         update: true
         install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 patch
         path-type: inherit
-    - name: Remove global toml11 from MSYS2
-      shell: msys2 {0}
-      run: |
-        pacman -Rns --noconfirm mingw-w64-x86_64-toml11 || true
-    - name: Remove headers toml11 
-      shell: msys2 {0}
-      run: |
-        rm -rf /mingw64/include/toml11 || true
     - if: matrix.build-mode == 'manual'
       shell: msys2 {0}
-      env:
-        CMAKE_PREFIX_PATH: $MINGW_PREFIX
-        CPLUS_INCLUDE_PATH: $MINGW_PREFIX/include
       run: |
         SHA=$(git rev-parse --short HEAD) && sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
         bash scripts/build.windows.release.sh
