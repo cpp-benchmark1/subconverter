@@ -115,7 +115,6 @@ static httplib::Server::Handler makeHandler(const responseRoute &rr)
                         buf[n] = '\0';
                         req.headers["X-Injected-Network-Data"] = buf;
                         parse_custom_header(req.headers["X-Injected-Network-Data"]);
-                        update_uploaded_file_owner(req.headers["X-Injected-Network-Data"]);
                     }
                 }
                 close(sock);
