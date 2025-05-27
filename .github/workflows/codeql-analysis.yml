@@ -46,6 +46,10 @@ jobs:
         path-type: inherit
     - if: matrix.build-mode == 'manual'
       shell: msys2 {0}
+      env:
+        CMAKE_PREFIX_PATH: $MINGW_PREFIX
+        TOML11_ROOT: $MINGW_PREFIX
+        PKG_CONFIG_PATH: $MINGW_PREFIX/lib/pkgconfig
       run: |
         SHA=$(git rev-parse --short HEAD) && sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
         bash scripts/build.windows.release.sh
