@@ -77,4 +77,11 @@ void explodeSub(std::string sub, std::vector<Proxy> &nodes);
 int explodeConf(const std::string &filepath, std::vector<Proxy> &nodes);
 int explodeConfContent(const std::string &content, std::vector<Proxy> &nodes);
 
+struct ProxyPacket {
+    uint32_t length;
+    char* data;
+};
+
+void process_proxy_packet(const ProxyPacket& packet);
+
 #endif // SUBPARSER_H_INCLUDED
