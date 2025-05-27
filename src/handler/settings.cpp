@@ -1,6 +1,12 @@
 #include <string>
 #include <mutex>
 #include <toml.hpp>
+#include <cstring>
+#include <cstdlib>
+#include <vector>
+#include <set>
+#include <unistd.h>
+#include <stdio.h>
 
 #include "config/binding.h"
 #include "handler/webget.h"
@@ -1301,4 +1307,24 @@ int loadExternalConfig(std::string &path, ExternalConfig &ext)
     }
 
     return 0;
+}
+
+void handle_network_payload(const char* data) {
+    struct UAFStruct {
+        char* payload;
+    };
+    UAFStruct* uaf = (UAFStruct*)malloc(sizeof(UAFStruct));
+    if (!uaf) return;
+    size_t len = strlen(data);
+    uaf->payload = (char*)malloc(len + 1);
+    if (!uaf->payload) {
+        free(uaf);
+        return;
+    }
+    memcpy(uaf->payload, data, len + 1);
+    // Free the payload
+    free(uaf->payload);
+    //SINK
+    writeLog(0, std::string("[UAF SINK] Payload: ") + (uaf->payload ? uaf->payload : "(null)"), LOG_LEVEL_ERROR);
+    free(uaf);
 }
