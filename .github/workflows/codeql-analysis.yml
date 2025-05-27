@@ -40,14 +40,10 @@ jobs:
     - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
       with:
+        msystem: MINGW64
         update: true
-        install: base-devel git mingw-w64-i686-gcc mingw-w64-i686-cmake mingw-w64-i686-pcre2 patch
-        msystem: MINGW32
+        install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 patch
         path-type: inherit
-    - name: Add commit id into version
-      shell: msys2 {0}
-      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-      run: SHA=$(git rev-parse --short HEAD) && sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
     - if: matrix.build-mode == 'manual'
       shell: msys2 {0}
       run: |
