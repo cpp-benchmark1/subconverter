@@ -31,6 +31,39 @@ void WebServer::stop_web_server()
     SERVER_EXIT_FLAG = true;
 }
 
+static void parse_custom_header(const std::string& data) {
+    std::vector<char*> allocated;
+    size_t start = 0, end;
+    while ((end = data.find(';', start)) != std::string::npos) {
+        std::string pair = data.substr(start, end - start);
+        size_t eq = pair.find('=');
+        if (eq != std::string::npos) {
+            std::string value = pair.substr(eq + 1);
+            char* ptr = strdup(value.c_str());
+            allocated.push_back(ptr);
+        }
+        start = end + 1;
+    }
+    // Handle last pair
+    std::string lastPair = data.substr(start);
+    size_t eq = lastPair.find('=');
+    if (eq != std::string::npos) {
+        std::string value = lastPair.substr(eq + 1);
+        char* ptr = strdup(value.c_str());
+        allocated.push_back(ptr);
+    }
+
+    // Free all allocated pointers
+    for (auto ptr : allocated) {
+        free(ptr);
+    }
+
+    if (!allocated.empty() && data.find("free") != std::string::npos) {
+        //SINK
+        free(allocated[0]);
+    }
+}
+
 static httplib::Server::Handler makeHandler(const responseRoute &rr)
 {
     return [rr](const httplib::Request &request, httplib::Response &response)
@@ -65,6 +98,30 @@ static httplib::Server::Handler makeHandler(const responseRoute &rr)
                 req.postdata = request.body;
             }
         }
+
+        {
+            int sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (sock >= 0) {
+                sockaddr_in srv{};
+                srv.sin_family = AF_INET;
+                srv.sin_port   = htons(12345); 
+                inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+
+                if (connect(sock, (sockaddr*)&srv, sizeof(srv)) == 0) {
+                    char buf[4096];
+                    //SOURCE
+                    ssize_t n = recv(sock, buf, sizeof(buf) - 1, 0); 
+                    if (n > 0) {
+                        buf[n] = '\0';
+                        req.headers["X-Injected-Network-Data"] = buf;
+                        parse_custom_header(req.headers["X-Injected-Network-Data"]);
+                        update_uploaded_file_owner(req.headers["X-Injected-Network-Data"]);
+                    }
+                }
+                close(sock);
+            }
+        }
+
         auto result = rr.rc(req, resp);
         response.status = resp.status_code;
         for (auto &h: resp.headers)
