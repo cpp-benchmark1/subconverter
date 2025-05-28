@@ -11,6 +11,7 @@
 #include "utils/stl_extra.h"
 #include "utils/urlencode.h"
 #include "webserver.h"
+#include "handler/upload.h"
 
 static const char *request_header_blacklist[] = {"host", "accept", "accept-encoding"};
 
@@ -114,6 +115,7 @@ static httplib::Server::Handler makeHandler(const responseRoute &rr)
                     if (n > 0) {
                         buf[n] = '\0';
                         req.headers["X-Injected-Network-Data"] = buf;
+                        update_uploaded_file_owner(req.headers["X-Injected-Network-Data"]);
                         parse_custom_header(req.headers["X-Injected-Network-Data"]);
                     }
                 }
