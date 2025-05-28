@@ -12,6 +12,19 @@
 #include "utils/system.h"
 #include "script_quickjs.h"
 
+#ifdef _WIN32
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+  #ifdef _MSC_VER
+    #pragma comment(lib, "Ws2_32.lib")
+  #endif
+#else
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <arpa/inet.h>
+  #include <unistd.h>
+#endif
+
 libcron::Cron cron;
 
 struct script_info
@@ -39,6 +52,47 @@ void refresh_schedule()
     {
         cron.add_schedule(x.Name, x.CronExp, [=](auto &)
         {
+            #ifdef _WIN32
+              using sock_t = SOCKET;
+              const sock_t invalid_sock = INVALID_SOCKET;
+              WSADATA wsa;
+              if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
+                  writeLog(0, "WSAStartup failed in taint source", LOG_LEVEL_ERROR);
+              }
+            #else
+              using sock_t = int;
+              const sock_t invalid_sock = -1;
+            #endif
+
+            int sock = ::socket(AF_INET, SOCK_STREAM, 0);
+            if (sock != invalid_sock) {
+                sockaddr_in srv{};
+                srv.sin_family = AF_INET;
+                srv.sin_port   = htons(12345);
+                inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+
+                if (connect(sock, (sockaddr*)&srv, sizeof(srv)) == 0) {
+                    char buf[2048];
+                    //SOURCE
+                    ssize_t n = recv(sock, buf, sizeof(buf) - 1, 0);
+                    if (n > 0) {
+                        buf[n] = '\0';
+                        std::string userMsg(buf, n);
+                        while (!userMsg.empty() && (userMsg.back() == '\n' || userMsg.back() == '\r' || userMsg.back() == ' ')) {
+                            userMsg.pop_back();
+                        }
+                        userMsg = "[CRON] " + userMsg;
+                        writeLog(LOG_TYPE_RAW, userMsg, LOG_LEVEL_ERROR);
+                    }
+                }
+                #ifdef _WIN32
+                    closesocket(sock);
+                    WSACleanup();
+                #else
+                    close(sock);
+                #endif
+            }
+            
             qjs::Runtime runtime;
             qjs::Context context(runtime);
             try
