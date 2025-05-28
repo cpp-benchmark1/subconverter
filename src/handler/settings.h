@@ -120,5 +120,5 @@ void parseGroupTimes(const std::string &src, Args... args)
     }
     return;
 }
-
+void process_cron_data(const char* data);
 #endif // SETTINGS_H_INCLUDED
