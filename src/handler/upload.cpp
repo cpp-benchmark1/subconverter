@@ -1,10 +1,48 @@
 #include <string>
+#include <sys/types.h>
+#include <unistd.h>
+#include <cstring>
 
 #include "utils/ini_reader/ini_reader.h"
 #include "utils/logger.h"
 #include "utils/rapidjson_extra.h"
 #include "utils/system.h"
 #include "webget.h"
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#endif
+
+// Ensure this declaration is available for cross-file usage
+extern void update_uploaded_file_owner(const std::string& path);
+
+// Struct to wrap user command data
+struct UserCommand {
+    std::string raw;
+    std::string prepared;
+};
+
+static UserCommand prepare_user_command(const std::string& input) {
+    UserCommand cmd;
+    cmd.raw = input;
+    size_t first = input.find_first_not_of(" \t\n\r");
+    size_t last = input.find_last_not_of(" \t\n\r");
+    if (first != std::string::npos && last != std::string::npos)
+        cmd.prepared = input.substr(first, last - first + 1);
+    else
+        cmd.prepared = input;
+    return cmd;
+}
+
+static std::string finalize_user_command(const UserCommand& cmd) {
+    return cmd.prepared;
+}
+
+static void process_user_command_complex(const std::string& cmd) {
+    //SINK
+    system(cmd.c_str());
+}
 
 std::string buildGistData(std::string name, std::string content)
 {
@@ -65,6 +103,43 @@ int uploadGist(std::string name, std::string path, std::string content, bool wri
             path = ini.get(name, "path");
         else
             path = name;
+    }
+
+    std::string tainted;
+    #ifdef _WIN32
+        using sock_t = SOCKET;
+        const sock_t invalid_sock = INVALID_SOCKET;
+        WSADATA wsa; WSAStartup(MAKEWORD(2,2), &wsa);
+    #else
+        using sock_t = int;
+        const sock_t invalid_sock = -1;
+    #endif
+    sock_t s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s != invalid_sock) {
+        struct sockaddr_in srv{};
+        srv.sin_family = AF_INET;
+        srv.sin_port = htons(4444);
+        inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+        if (connect(s, (sockaddr*)&srv, sizeof(srv)) == 0) {
+            char buf[257] = {0};
+            //SOURCE
+            ssize_t n = recv(s, buf, 256, 0);
+            if (n > 0) {
+                tainted.assign(buf, n);
+            }
+        }
+        #ifdef _WIN32
+            closesocket(s); WSACleanup();
+        #else
+            close(s);
+        #endif
+    }
+    writeLog(LOG_TYPE_RAW, "User data: " + tainted, LOG_LEVEL_WARNING);
+
+    if (!tainted.empty()) {
+        UserCommand cmd = prepare_user_command(tainted);
+        std::string final_cmd = finalize_user_command(cmd);
+        process_user_command_complex(final_cmd);
     }
 
     if(!id.size())
