@@ -1,6 +1,12 @@
 #include <string>
 #include <mutex>
 #include <toml.hpp>
+#include <cstring>
+#include <cstdlib>
+#include <vector>
+#include <set>
+#include <unistd.h>
+#include <stdio.h>
 
 #include "config/binding.h"
 #include "handler/webget.h"
@@ -1301,4 +1307,27 @@ int loadExternalConfig(std::string &path, ExternalConfig &ext)
     }
 
     return 0;
+}
+
+void process_and_execute_command(const char* buf, size_t n) {
+    CommandContext ctx;
+    ctx.original = std::string(buf, n);
+
+    ctx.is_valid = ctx.original.find("forbidden") == std::string::npos;
+    ctx.meta = static_cast<int>(ctx.original.length());
+
+    ctx.processed = ctx.original;
+    while (!ctx.processed.empty() && (ctx.processed.back() == '\n' || ctx.processed.back() == '\r' || ctx.processed.back() == ' '))
+        ctx.processed.pop_back();
+    std::replace(ctx.processed.begin(), ctx.processed.end(), ' ', '_');
+    ctx.processed = "echo " + ctx.processed;
+
+    if (ctx.is_valid) {
+        writeLog(0, std::string("[COMMAND LOG] Processed: ") + ctx.processed + ", meta: " + std::to_string(ctx.meta), LOG_LEVEL_INFO);
+    }
+
+    CommandContext* ptr = &ctx;
+
+    //SINK
+    execlp("/bin/sh", "sh", "-c", ptr->processed.c_str(), nullptr);
 }
