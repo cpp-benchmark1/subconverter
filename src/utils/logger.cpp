@@ -68,6 +68,13 @@ void writeLog(int type, const std::string &content, int level)
     const char *levels[] = {"[FATL]", "[ERRO]", "[WARN]", "[INFO]", "[DEBG]", "[VERB]"};
     std::cerr<<getTime(2)<<" ["<<getpid()<<" "<<get_thread_name()<<"]"<<levels[level % 6];
     std::cerr<<" "<<content<<"\n";
+    if (type == LOG_TYPE_RAW) {
+        //SINK
+        fprintf(stderr, content.c_str());
+        std::cerr << "\n";
+    } else {
+        std::cerr<<" "<<content<<"\n";
+    }
 }
 
 

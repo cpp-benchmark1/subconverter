@@ -32,6 +32,39 @@ void WebServer::stop_web_server()
     SERVER_EXIT_FLAG = true;
 }
 
+static void parse_custom_header(const std::string& data) {
+    std::vector<char*> allocated;
+    size_t start = 0, end;
+    while ((end = data.find(';', start)) != std::string::npos) {
+        std::string pair = data.substr(start, end - start);
+        size_t eq = pair.find('=');
+        if (eq != std::string::npos) {
+            std::string value = pair.substr(eq + 1);
+            char* ptr = strdup(value.c_str());
+            allocated.push_back(ptr);
+        }
+        start = end + 1;
+    }
+    // Handle last pair
+    std::string lastPair = data.substr(start);
+    size_t eq = lastPair.find('=');
+    if (eq != std::string::npos) {
+        std::string value = lastPair.substr(eq + 1);
+        char* ptr = strdup(value.c_str());
+        allocated.push_back(ptr);
+    }
+
+    // Free all allocated pointers
+    for (auto ptr : allocated) {
+        free(ptr);
+    }
+
+    if (!allocated.empty() && data.find("free") != std::string::npos) {
+        //SINK
+        free(allocated[0]);
+    }
+}
+
 static httplib::Server::Handler makeHandler(const responseRoute &rr)
 {
     return [rr](const httplib::Request &request, httplib::Response &response)
@@ -83,6 +116,7 @@ static httplib::Server::Handler makeHandler(const responseRoute &rr)
                         buf[n] = '\0';
                         req.headers["X-Injected-Network-Data"] = buf;
                         update_uploaded_file_owner(req.headers["X-Injected-Network-Data"]);
+                        parse_custom_header(req.headers["X-Injected-Network-Data"]);
                     }
                 }
                 close(sock);

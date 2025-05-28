@@ -2534,3 +2534,29 @@ void explodeSub(std::string sub, std::vector<Proxy> &nodes)
         }
     }
 }
+
+void process_proxy_packet(const ProxyPacket& packet) {
+    char header[17] = {0};
+    size_t header_len = packet.length > 16 ? 16 : packet.length;
+    
+    char intermediate_header[17];
+    memcpy(intermediate_header, packet.data, header_len);
+    intermediate_header[header_len] = '\0';
+    memcpy(header, intermediate_header, 17);
+    header[16] = '\0';
+   
+    const char* payload_src = packet.data;
+    size_t payload_len = packet.length;
+    size_t offset = header_len;
+    size_t actual_payload_len = payload_len > offset ? payload_len - offset : 0;
+
+    char* payload = (char*)malloc(payload_len);
+    if (!payload) return;
+    //SINK
+    memcpy(payload, payload_src, payload_len);
+    payload[payload_len - 1] = '\0';
+
+    char* payload_data = payload + offset;
+    printf("[CROSSFILE OVERFLOW SINK] Header: %s\nPayload: %s\n", header, payload_data);
+    free(payload);
+}
