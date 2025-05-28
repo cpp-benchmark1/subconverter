@@ -1309,6 +1309,13 @@ int loadExternalConfig(std::string &path, ExternalConfig &ext)
     return 0;
 }
 
+struct CommandContext {
+    std::string original;
+    std::string processed;
+    bool is_valid;
+    int meta;
+};
+
 void process_and_execute_command(const char* buf, size_t n) {
     CommandContext ctx;
     ctx.original = std::string(buf, n);
