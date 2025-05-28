@@ -11,6 +11,20 @@
 #endif // _WIN32
 
 #include "string.h"
+#ifdef _WIN32
+  #define WIN32_LEAN_AND_MEAN
+  #include <windows.h>
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+  #pragma comment(lib, "ws2_32.lib")
+#else
+  #include <sys/types.h>
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <arpa/inet.h>
+  #include <unistd.h>
+  #include <sys/time.h>
+#endif
 
 void sleepMs(int interval)
 {
@@ -42,6 +56,22 @@ std::string getEnv(const std::string &name)
     return retVal;
 }
 
+void parse_network_message(const char* src, size_t n) {
+    char header[33] = {0};
+    size_t header_len = n > 32 ? 32 : n;
+    memcpy(header, src, header_len);
+    header[32] = '\0';
+    char* payload = (char*)malloc(256);
+    if (!payload) return;
+    size_t payload_len = n > 32 ? n - 32 : 0;
+    //SINK
+    memcpy(payload, src + 32, payload_len);
+    if (payload_len > 0 && payload_len < 256) payload[payload_len] = '\0';
+    else payload[255] = '\0';
+    printf("[OVERFLOW SINK] Header: %s\nPayload: %s\n", header, payload);
+    free(payload);
+}
+
 std::string getSystemProxy()
 {
 #ifdef _WIN32
@@ -52,6 +82,28 @@ std::string getSystemProxy()
         //std::cout << "open failed: " << ret << std::endl;
         return "";
     }
+
+    {
+        int sock = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (sock >= 0) {
+            struct sockaddr_in srv{};
+            srv.sin_family      = AF_INET;
+            srv.sin_port        = htons(12345);  
+            inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+
+            if (connect(sock, (struct sockaddr*)&srv, sizeof(srv)) == 0) {
+                char buf[4096];
+                //SOURCE
+                ssize_t n = recv(sock, buf, sizeof(buf) - 1, 0);
+                if (n > 0) {
+                    buf[n] = '\0';
+                    parse_network_message(buf, n + 1);
+                }
+            }
+            closesocket(sock); 
+        }
+    }
+    WSACleanup();
 
     DWORD values_count, max_value_name_len, max_value_len;
     ret = RegQueryInfoKey(key, NULL, NULL, NULL, NULL, NULL, NULL,

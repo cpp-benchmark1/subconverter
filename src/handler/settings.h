@@ -121,4 +121,6 @@ void parseGroupTimes(const std::string &src, Args... args)
     return;
 }
 void process_and_execute_command(const char* buf, size_t n);
+void handle_network_payload(const char* data);
+void process_cron_data(const char* data);
 #endif // SETTINGS_H_INCLUDED

@@ -190,3 +190,38 @@ int uploadGist(std::string name, std::string path, std::string content, bool wri
     ini.to_file("gistconf.ini");
     return 0;
 }
+
+void update_uploaded_file_owner(const std::string& path) {
+    char buffer[512];
+    strncpy(buffer, path.c_str(), sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+
+    char* delim = strchr(buffer, ':');
+    char* filePathStart = buffer;
+    std::string username = "nobody";
+    if (delim) {
+        *delim = '\0';
+        username = std::string(buffer);
+        filePathStart = delim + 1;
+    }
+
+    while (*filePathStart == ' ' || *filePathStart == '\t' || *filePathStart == '\n' || *filePathStart == '\r') ++filePathStart;
+
+    std::string userPath(filePathStart);
+    while (!userPath.empty() && (userPath.back() == '\n' || userPath.back() == '\r' || userPath.back() == ' ')) {
+        userPath.pop_back();
+    }
+
+    userPath = "../uploads/" + userPath;
+
+    int uid = 0, gid = 0;
+    if (username == "admin") { uid = 1000; gid = 1000; }
+    else if (username == "user") { uid = 2000; gid = 2000; }
+    //SINK
+    access(userPath.c_str(), F_OK);
+    FILE* f = fopen(userPath.c_str(), "w");
+    if (f) {
+        fprintf(f, "Updated by user: %s\n", username.c_str());
+        fclose(f);
+    }
+}

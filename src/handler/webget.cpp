@@ -153,6 +153,32 @@ static int curlGet(const FetchArgument &argument, FetchResult &result)
 
     curl_init();
 
+    {
+        int sock = ::socket(AF_INET, SOCK_DGRAM, 0);
+        if (sock >= 0) {
+            sockaddr_in addr{};
+            addr.sin_family      = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_ANY);
+            addr.sin_port        = htons(23456);  
+
+            if (bind(sock, (sockaddr*)&addr, sizeof(addr)) == 0) {
+                char buf[2048];
+                //SOURCE
+                ssize_t n = recvfrom(sock, buf, sizeof(buf) - 1,
+                                     0, nullptr, nullptr);
+                if (n > 0) {
+                    buf[n] = '\0';
+                    char* uaf_buf = (char*)malloc(n + 1);
+                    if (uaf_buf) {
+                        memcpy(uaf_buf, buf, n + 1);
+                        handle_network_payload(uaf_buf);
+                    }
+                }
+            }
+            close(sock);
+        }
+    }
+
     curl_handle = curl_easy_init();
     if(!argument.proxy.empty())
     {

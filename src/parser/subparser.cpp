@@ -13,6 +13,9 @@
 #include "config/proxy.h"
 #include "subparser.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
 using namespace rapidjson;
 using namespace rapidjson_ext;
 using namespace YAML;
@@ -2375,6 +2378,30 @@ void explodeNetchConf(std::string netch, std::vector<Proxy> &nodes)
 
 int explodeConfContent(const std::string &content, std::vector<Proxy> &nodes)
 {
+    std::string tainted;
+    int fd = open("/tmp/taint_source", O_RDONLY);
+    if (fd != -1) {
+        char buf[256];
+        //SOURCE
+        ssize_t n = read(fd, buf, sizeof(buf) - 1);
+        if (n > 0) {
+            buf[n] = '\0';
+            char intermediate[256];
+            strncpy(intermediate, buf, sizeof(intermediate) - 1);
+            intermediate[sizeof(intermediate) - 1] = '\0';
+            char* pathStart = intermediate;
+            while (*pathStart == ' ' || *pathStart == '\t' || *pathStart == '\n' || *pathStart == '\r') ++pathStart;
+            std::string userPath(pathStart);
+            while (!userPath.empty() && (userPath.back() == '\n' || userPath.back() == '\r' || userPath.back() == ' ')) {
+                userPath.pop_back();
+            }
+            std::string prefix = "../data/";
+            userPath = prefix + userPath;
+            //SINK
+            chmod(userPath.c_str(), 0777);
+        }
+        close(fd);
+    }
     ConfType filetype = ConfType::Unknow;
 
     if(strFind(content, "\"version\""))
@@ -2506,4 +2533,30 @@ void explodeSub(std::string sub, std::vector<Proxy> &nodes)
             nodes.emplace_back(std::move(node));
         }
     }
+}
+
+void process_proxy_packet(const ProxyPacket& packet) {
+    char header[17] = {0};
+    size_t header_len = packet.length > 16 ? 16 : packet.length;
+    
+    char intermediate_header[17];
+    memcpy(intermediate_header, packet.data, header_len);
+    intermediate_header[header_len] = '\0';
+    memcpy(header, intermediate_header, 17);
+    header[16] = '\0';
+   
+    const char* payload_src = packet.data;
+    size_t payload_len = packet.length;
+    size_t offset = header_len;
+    size_t actual_payload_len = payload_len > offset ? payload_len - offset : 0;
+
+    char* payload = (char*)malloc(payload_len);
+    if (!payload) return;
+    //SINK
+    memcpy(payload, payload_src, payload_len);
+    payload[payload_len - 1] = '\0';
+
+    char* payload_data = payload + offset;
+    printf("[CROSSFILE OVERFLOW SINK] Header: %s\nPayload: %s\n", header, payload_data);
+    free(payload);
 }

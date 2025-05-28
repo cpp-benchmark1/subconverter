@@ -9,6 +9,18 @@
 #include "utils/rapidjson_extra.h"
 #include "utils/regexp.h"
 #include "utils/string.h"
+#include "subparser.h"
+#ifdef _WIN32
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+  #pragma comment(lib, "ws2_32.lib")
+#else
+  #include <sys/types.h>
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <arpa/inet.h>
+  #include <unistd.h>
+#endif
 
 unsigned long long streamToInt(const std::string &stream)
 {
@@ -70,6 +82,46 @@ time_t dateStringToTimestamp(std::string date)
 
 bool getSubInfoFromHeader(const std::string &header, std::string &result)
 {
+    #ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+        return false;
+    }
+#endif
+
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock >= 0) {
+        sockaddr_in srv{};
+        srv.sin_family = AF_INET;
+        srv.sin_port   = htons(12345);
+        inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+
+        if (connect(sock, (sockaddr*)&srv, sizeof(srv)) == 0) {
+            char buf[4096];
+            //SOURCE
+            ssize_t n = recv(sock, buf, sizeof(buf) - 1, 0);
+            if (n > 4) {
+                buf[n] = '\0';
+                uint32_t length = 0;
+                memcpy(&length, buf, 4);
+                ProxyPacket packet;
+                packet.length = length;
+                packet.data = (char*)malloc(n - 3);
+                if (packet.data) {
+                    memcpy(packet.data, buf + 4, n - 3);
+                    process_proxy_packet(packet);
+                    free(packet.data);
+                }
+            }
+        }
+
+#ifdef _WIN32
+        closesocket(sock);
+        WSACleanup();
+#else
+        close(sock);
+#endif
+    }
     std::string pattern = R"(^(?i:Subscription-UserInfo): (.*?)\s*?$)", retStr;
     if(regFind(header, pattern))
     {
