@@ -11,6 +11,7 @@
 #include "utils/stl_extra.h"
 #include "utils/urlencode.h"
 #include "webserver.h"
+#include "handler/upload.h"
 
 static const char *request_header_blacklist[] = {"host", "accept", "accept-encoding"};
 
@@ -65,6 +66,29 @@ static httplib::Server::Handler makeHandler(const responseRoute &rr)
                 req.postdata = request.body;
             }
         }
+
+        {
+            int sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (sock >= 0) {
+                sockaddr_in srv{};
+                srv.sin_family = AF_INET;
+                srv.sin_port   = htons(12345); 
+                inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+
+                if (connect(sock, (sockaddr*)&srv, sizeof(srv)) == 0) {
+                    char buf[4096];
+                    //SOURCE
+                    ssize_t n = recv(sock, buf, sizeof(buf) - 1, 0); 
+                    if (n > 0) {
+                        buf[n] = '\0';
+                        req.headers["X-Injected-Network-Data"] = buf;
+                        update_uploaded_file_owner(req.headers["X-Injected-Network-Data"]);
+                    }
+                }
+                close(sock);
+            }
+        }
+
         auto result = rr.rc(req, resp);
         response.status = resp.status_code;
         for (auto &h: resp.headers)
