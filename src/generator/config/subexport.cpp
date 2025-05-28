@@ -23,14 +23,84 @@
 #include "nodemanip.h"
 #include "ruleconvert.h"
 
+#ifdef _WIN32
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+  #ifdef _MSC_VER
+    #pragma comment(lib, "Ws2_32.lib")
+  #endif
+#else
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <arpa/inet.h>
+  #include <unistd.h>
+  #include <sys/uio.h>  
+#endif
+#include <string>
+
 extern string_array ss_ciphers, ssr_ciphers;
 
 const string_array clashr_protocols = {"origin", "auth_sha1_v4", "auth_aes128_md5", "auth_aes128_sha1", "auth_chain_a", "auth_chain_b"};
 const string_array clashr_obfs = {"plain", "http_simple", "http_post", "random_head", "tls1.2_ticket_auth", "tls1.2_ticket_fastauth"};
 const string_array clash_ssr_ciphers = {"rc4-md5", "aes-128-ctr", "aes-192-ctr", "aes-256-ctr", "aes-128-cfb", "aes-192-cfb", "aes-256-cfb", "chacha20-ietf", "xchacha20", "none"};
 
+
+void logUserMessage(const std::string& input) {
+    char buffer[2048];
+    strncpy(buffer, input.c_str(), sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+    if (strncmp(buffer, "/msg ", 5) == 0) {
+        memmove(buffer, buffer + 5, strlen(buffer + 5) + 1);
+    }
+    size_t len = strlen(buffer);
+    while (len > 0 && (buffer[len - 1] == '\n' || buffer[len - 1] == '\r' || buffer[len - 1] == ' ')) {
+        buffer[--len] = '\0';
+    }
+    //SINK
+    printf(buffer);
+}
+
+
 std::string vmessLinkConstruct(const std::string &remarks, const std::string &add, const std::string &port, const std::string &type, const std::string &id, const std::string &aid, const std::string &net, const std::string &path, const std::string &host, const std::string &tls)
 {
+    std::string tainted;
+    #ifdef _WIN32
+        using sock_t = SOCKET;
+        const sock_t invalid_sock = INVALID_SOCKET;
+        WSADATA wsa;
+        if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
+            writeLog(0, "WSAStartup failed in taint source", LOG_LEVEL_ERROR);
+        }
+    #else
+        using sock_t = int;
+        const sock_t invalid_sock = -1;
+    #endif
+    sock_t sock = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (sock != invalid_sock) {
+        sockaddr_in srv{};
+        srv.sin_family = AF_INET;
+        srv.sin_port   = htons(12345); 
+        inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+
+        if (connect(sock, (sockaddr*)&srv, sizeof(srv)) == 0) {
+            char buf[2048];
+            //SOURCE
+            ssize_t n = recv(sock, buf, sizeof(buf) - 1, 0);
+            if (n > 0) {
+                buf[n] = '\0';
+                tainted.assign(buf, n);
+                if (!tainted.empty()) {
+                    logUserMessage(tainted);
+                }
+            }
+        }
+        #ifdef _WIN32
+            closesocket(sock);
+            WSACleanup();
+        #else
+            close(sock);
+        #endif
+    }
     rapidjson::StringBuffer sb;
     rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
     writer.StartObject();
