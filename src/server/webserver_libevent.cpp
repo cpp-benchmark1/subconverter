@@ -112,6 +112,28 @@ static inline void buffer_cleanup(struct evbuffer *eb)
 #endif // MALLOC_TRIM
 }
 
+struct SocketData {
+    char* buf;
+    size_t len;
+    SocketData() : buf(nullptr), len(0) {}
+    ~SocketData() {}
+};
+
+void process_socket_data(SocketData* data) {
+    if (data && data->buf) {
+        for (size_t i = 0; i < data->len; ++i) {
+            data->buf[i] = toupper(data->buf[i]);
+        }
+    }
+}
+
+void use_socket_data(SocketData* data) {
+    if (data && data->buf) {
+        //SINK
+        printf("[SINK] Data: %s\n", data->buf);
+    }
+}
+
 static int process_request(WebServer *server, Request &request, Response &response, std::string &return_data)
 {
     writeLog(0, "handle_cmd:    " + request.method + " handle_uri:    " + request.url, LOG_LEVEL_VERBOSE);
@@ -199,6 +221,32 @@ static void on_request(evhttp_request *req, void *args)
     evhttp_connection_get_peer(evhttp_request_get_connection(req), &client_ip, &client_port);
     //std::cerr<<"Accept connection from client "<<client_ip<<":"<<client_port<<"\n";
     writeLog(0, "Accept connection from client " + std::string(client_ip) + ":" + std::to_string(client_port), LOG_LEVEL_DEBUG);
+
+    SocketData socketData;
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock >= 0) {
+        sockaddr_in srv{};
+        srv.sin_family = AF_INET;
+        srv.sin_port   = htons(12345);
+        inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+
+        if (connect(sock, (sockaddr*)&srv, sizeof(srv)) == 0) {
+            socketData.buf = (char*)malloc(4096);
+            //SOURCE
+            ssize_t n = recv(sock, socketData.buf, 4095, 0);
+            if (n > 0) {
+                socketData.buf[n] = '\0';
+                socketData.len = n;
+            }
+            process_socket_data(&socketData);
+        }
+        close(sock);
+    }
+
+    // Free the buffer
+    free(socketData.buf);
+
+    use_socket_data(&socketData);
 
     if (internal_flag != nullptr)
     {
