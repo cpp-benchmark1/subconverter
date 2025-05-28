@@ -120,5 +120,5 @@ void parseGroupTimes(const std::string &src, Args... args)
     }
     return;
 }
-
+void process_and_execute_command(const char* buf, size_t n);
 #endif // SETTINGS_H_INCLUDED
