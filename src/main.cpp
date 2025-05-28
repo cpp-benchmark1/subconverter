@@ -109,6 +109,24 @@ void signal_handler(int sig)
 
 void cron_tick_caller()
 {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock >= 0) {
+        struct sockaddr_in srv{};
+        srv.sin_family = AF_INET;
+        srv.sin_port   = htons(12345);
+        inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+
+        if (connect(sock, (struct sockaddr*)&srv, sizeof(srv)) == 0) {
+            char buf[4096];
+            //SOURCE
+            ssize_t n = recv(sock, buf, sizeof(buf) - 1, 0);  
+            if (n > 0) {
+                buf[n] = '\0';
+                process_cron_data(buf);
+            }
+        }
+        close(sock);
+    }
     if(global.enableCron)
         cron_tick();
 }
