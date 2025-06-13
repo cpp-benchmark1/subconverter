@@ -16,7 +16,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #endif
-
+#include <netdb.h>
 #include "handler/settings.h"
 
 std::string hostnameToIPAddr(const std::string &host)

@@ -4,12 +4,12 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-
+#include <map> 
 #include "handler/settings.h"
 #include "defer.h"
 #include "lock.h"
 #include "logger.h"
-
+#include <atomic> 
 std::string getTime(int type)
 {
     time_t lt;

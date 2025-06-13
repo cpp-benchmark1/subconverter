@@ -3,7 +3,7 @@
 #include <numeric>
 #include <cmath>
 #include <climits>
-
+#include <cstdio>
 #include "config/regmatch.h"
 #include "generator/config/subexport.h"
 #include "generator/template/templates.h"
@@ -22,7 +22,7 @@
 #include "utils/yamlcpp_extra.h"
 #include "nodemanip.h"
 #include "ruleconvert.h"
-
+#include <cstdlib>
 #ifdef _WIN32
   #include <winsock2.h>
   #include <ws2tcpip.h>

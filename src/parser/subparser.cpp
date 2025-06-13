@@ -1,6 +1,6 @@
 #include <string>
 #include <map>
-
+#include <sys/stat.h> 
 #include "utils/base64/base64.h"
 #include "utils/ini_reader/ini_reader.h"
 #include "utils/network.h"
@@ -12,10 +12,10 @@
 #include "utils/yamlcpp_extra.h"
 #include "config/proxy.h"
 #include "subparser.h"
-
+#include <cstring> 
 #include <fcntl.h>
 #include <unistd.h>
-
+#include <cstdio>
 using namespace rapidjson;
 using namespace rapidjson_ext;
 using namespace YAML;

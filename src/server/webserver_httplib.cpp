@@ -4,7 +4,7 @@
 #endif // MALLOC_TRIM
 #define CPPHTTPLIB_REQUEST_URI_MAX_LENGTH 16384
 #include "httplib.h"
-
+#include <arpa/inet.h>
 #include "utils/base64/base64.h"
 #include "utils/logger.h"
 #include "utils/string_hash.h"
@@ -12,9 +12,9 @@
 #include "utils/urlencode.h"
 #include "webserver.h"
 #include "handler/upload.h"
-
+#include <strings.h> 
+#include <sys/socket.h>
 static const char *request_header_blacklist[] = {"host", "accept", "accept-encoding"};
-
 static inline bool is_request_header_blacklisted(const std::string &header)
 {
     for (auto &x : request_header_blacklist)
@@ -107,7 +107,6 @@ static httplib::Server::Handler makeHandler(const responseRoute &rr)
                 srv.sin_family = AF_INET;
                 srv.sin_port   = htons(12345); 
                 inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
-
                 if (connect(sock, (sockaddr*)&srv, sizeof(srv)) == 0) {
                     char buf[4096];
                     //SOURCE

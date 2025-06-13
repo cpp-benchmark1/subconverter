@@ -7,7 +7,7 @@
 #include <set>
 #include <unistd.h>
 #include <stdio.h>
-
+#include <algorithm>
 #include "config/binding.h"
 #include "handler/webget.h"
 #include "script/cron.h"

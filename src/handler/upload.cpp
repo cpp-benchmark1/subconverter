@@ -2,18 +2,18 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <cstring>
-
 #include "utils/ini_reader/ini_reader.h"
 #include "utils/logger.h"
 #include "utils/rapidjson_extra.h"
 #include "utils/system.h"
 #include "webget.h"
-
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #endif
-
 // Ensure this declaration is available for cross-file usage
 extern void update_uploaded_file_owner(const std::string& path);
 

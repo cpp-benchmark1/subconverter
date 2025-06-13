@@ -2,7 +2,7 @@
 #include <vector>
 #include <cmath>
 #include <ctime>
-
+#include <cstdlib>
 #include "config/regmatch.h"
 #include "parser/config/proxy.h"
 #include "utils/base64/base64.h"
@@ -21,7 +21,7 @@
   #include <arpa/inet.h>
   #include <unistd.h>
 #endif
-
+#include <cstring>
 unsigned long long streamToInt(const std::string &stream)
 {
     if(stream.empty())

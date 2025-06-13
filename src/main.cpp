@@ -5,7 +5,7 @@
 
 #include <sys/types.h>
 #include <dirent.h>
-
+#include <sys/socket.h>
 #include "config/ruleset.h"
 #include "handler/interfaces.h"
 #include "handler/webget.h"
