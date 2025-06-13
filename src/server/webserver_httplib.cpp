@@ -4,7 +4,6 @@
 #endif // MALLOC_TRIM
 #define CPPHTTPLIB_REQUEST_URI_MAX_LENGTH 16384
 #include "httplib.h"
-#include <arpa/inet.h>
 #include "utils/base64/base64.h"
 #include "utils/logger.h"
 #include "utils/string_hash.h"
@@ -12,8 +11,11 @@
 #include "utils/urlencode.h"
 #include "webserver.h"
 #include "handler/upload.h"
-#include <strings.h> 
+#ifndef _WIN32
+#include <arpa/inet.h>
+#include <strings.h>
 #include <sys/socket.h>
+#endif
 static const char *request_header_blacklist[] = {"host", "accept", "accept-encoding"};
 static inline bool is_request_header_blacklisted(const std::string &header)
 {
@@ -26,12 +28,10 @@ static inline bool is_request_header_blacklisted(const std::string &header)
     }
     return false;
 }
-
 void WebServer::stop_web_server()
 {
     SERVER_EXIT_FLAG = true;
 }
-
 static void parse_custom_header(const std::string& data) {
     std::vector<char*> allocated;
     size_t start = 0, end;

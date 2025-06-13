@@ -1,11 +1,7 @@
 #include <iostream>
 #include <string>
-#include <unistd.h>
 #include <csignal>
-
-#include <sys/types.h>
 #include <dirent.h>
-#include <sys/socket.h>
 #include "config/ruleset.h"
 #include "handler/interfaces.h"
 #include "handler/webget.h"
@@ -21,18 +17,23 @@
 #include "utils/system.h"
 #include "utils/urlencode.h"
 #include "version.h"
+#ifndef _WIN32
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#endif
 
 //#include "vfs.h"
 
 WebServer webServer;
-
 #ifndef _WIN32
 void SetConsoleTitle(const std::string &title)
 {
     system(std::string("echo \"\\033]0;" + title + R"(\007\c")").data());
 }
 #endif // _WIN32
-
 void setcd(std::string &file)
 {
     char szTemp[1024] = {}, filename[256] = {};
@@ -57,7 +58,6 @@ void setcd(std::string &file)
     path.assign(szTemp);
     chdir(path.data());
 }
-
 void chkArg(int argc, char *argv[])
 {
     for(int i = 1; i < argc; i++)
