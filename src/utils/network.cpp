@@ -15,8 +15,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#endif
 #include <netdb.h>
+#endif
 #include "handler/settings.h"
 
 std::string hostnameToIPAddr(const std::string &host)
