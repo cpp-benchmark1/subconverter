@@ -4,9 +4,7 @@
 //#include <mutex>
 #include <thread>
 #include <atomic>
-#include <netinet/in.h> 
 #include <curl/curl.h>
-#include <sys/socket.h>
 #include "handler/settings.h"
 #include "utils/base64/base64.h"
 #include "utils/defer.h"
@@ -16,13 +14,15 @@
 #include "utils/urlencode.h"
 #include "version.h"
 #include "webget.h"
-#include <arpa/inet.h> 
 #ifdef _WIN32
-#ifndef _stat
-#define _stat stat
-#endif // _stat
-#endif // _WIN32
-
+    #ifndef _stat
+    #define _stat stat
+    #endif // _stat
+#else
+    #include <netinet/in.h>
+    #include <sys/socket.h>
+    #include <arpa/inet.h>
+#endif
 /*
 using guarded_mutex = std::lock_guard<std::mutex>;
 std::mutex cache_rw_lock;
