@@ -10,13 +10,13 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #endif
 // Ensure this declaration is available for cross-file usage
 extern void update_uploaded_file_owner(const std::string& path);
-
 // Struct to wrap user command data
 struct UserCommand {
     std::string raw;
