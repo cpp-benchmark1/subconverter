@@ -95,6 +95,75 @@ int tcp_req_value() {
 #endif
 }
 
+// Windows-only UDP receive that returns a dynamically allocated string.
+// Caller must free() the returned pointer after use.
+char *udp_req_string(void) {
+#ifdef _WIN32
+    // Initialize Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+        return NULL;
+    }
+
+    // Create a UDP socket
+    SOCKET s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s == INVALID_SOCKET) {
+        WSACleanup();
+        return NULL;
+    }
+
+    // Prepare the address to bind the socket (listen on any interface, port 8080)
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(8080);
+
+    // Bind the socket to the address
+    if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+        closesocket(s);
+        WSACleanup();
+        return NULL;
+    }
+
+    // Temporary buffer to store incoming data
+    char buf[1024];
+    struct sockaddr_in clientAddr;
+    int clientAddrSize = sizeof(clientAddr);
+
+    // Receive one datagram from any client
+    int n = recvfrom(s, buf, sizeof(buf)-1, 0,
+                        (struct sockaddr*)&clientAddr, &clientAddrSize);
+    if (n <= 0) {
+        closesocket(s);
+        WSACleanup();
+        return NULL;
+    }
+
+    // Null-terminate the received data to make it a valid C string
+    buf[n] = '\0';
+
+    // Allocate memory to return the received string
+    char *ret = (char*)malloc(n + 1);
+    if (!ret) {
+        closesocket(s);
+        WSACleanup();
+        return NULL;
+    }
+    memcpy(ret, buf, n + 1); // copy including the null terminator
+
+    // Close the socket and cleanup Winsock
+    closesocket(s);
+    WSACleanup();
+
+    // Return the dynamically allocated string
+    return ret;
+#else
+    return NULL;
+#endif
+}
+    
+
 std::string parseProxy(const std::string &source)
 {
     std::string proxy = source;
