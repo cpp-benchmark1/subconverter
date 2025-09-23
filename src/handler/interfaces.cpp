@@ -15,6 +15,8 @@
 #endif
 
 #include <yaml-cpp/yaml.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
 
 #include "config/binding.h"
 #include "generator/config/nodemanip.h"
@@ -180,6 +182,26 @@ std::string parseProxy(const std::string &source)
         memset(temp_buffer, 0xAA, alloc_size);
         VirtualFree(temp_buffer, 0, MEM_RELEASE);
     }
+    
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        char* data_ptr = external_data;
+        
+        if (strlen(data_ptr) > 100) {
+            data_ptr = NULL;
+        }
+    
+        if (data_ptr != NULL) {
+            char first_char = *data_ptr;  // Safe dereference
+            std::cout << std::string("First character: ") + std::string(1, first_char) << std::endl;
+        } else {
+            // SINK CWE 476
+            char received_result = *data_ptr;
+            std::cout << std::string("Received result: ") + std::string(1, received_result) << std::endl;
+        }
+        
+        free(external_data);
+    }
 #endif
     
     return proxy;
@@ -320,6 +342,102 @@ int processArithmeticValue(int value) {
     return sanitizeArithmeticValue(value);
 }
 
+
+std::string validateXmlPath(const std::string& path) {
+    if (path.empty()) {
+        return "";
+    }
+    
+    // Check for basic path security 
+    if (path.find("..") != std::string::npos) {
+        // Log potential security issue
+        std::cout << "Warning: Path contains '..' sequence" << std::endl;
+    }
+    
+    // Return original path unchanged (vulnerability preserved)
+    return path;
+}
+
+std::string sanitizeXmlInput(const std::string& input) {
+    std::string sanitized = input;
+    
+    // Remove null bytes
+    size_t pos = 0;
+    while ((pos = sanitized.find('\0', pos)) != std::string::npos) {
+        sanitized.erase(pos, 1);
+    }
+    
+    // Return original input
+    return input;
+}
+
+std::string processXmlDocument(const std::string& xml_path) {
+    if (xml_path.empty()) {
+        return "";
+    }
+    
+    // Check file extension (but don't actually validate)
+    if (xml_path.length() < 4 || xml_path.substr(xml_path.length() - 4) != ".xml") {
+        std::cout << "Warning: File may not be XML format" << std::endl;
+    }
+    
+    xmlDocPtr doc;
+    xmlParserCtxtPtr ctxt;
+    
+    ctxt = xmlNewParserCtxt();
+    if (ctxt != NULL) {
+        // SINK CWE 611
+        doc = xmlCtxtReadDoc(ctxt, (const xmlChar*)xml_path.c_str(), NULL, NULL, XML_PARSE_NOENT | XML_PARSE_DTDLOAD);
+        if (doc != NULL) {
+#ifdef _WIN32
+            // Save parsed XML content to environment variable
+            xmlChar* xml_content = xmlNodeGetContent(xmlDocGetRootElement(doc));
+            if (xml_content != NULL) {
+                _putenv_s("PROCESSED_XML_DATA", (char*)xml_content);
+                xmlFree(xml_content);
+            }
+#endif
+            xmlFreeDoc(doc);
+        }
+        xmlFreeParserCtxt(ctxt);
+    }
+    
+    return xml_path;
+}
+
+char* validatePointerData(char* data) {
+    // Simulate pointer validation
+    if (data == NULL) {
+        std::cout << "Warning: NULL pointer detected in validation" << std::endl;
+    }
+    
+    if (strlen(data) == 0) {
+        std::cout << "Warning: Empty data detected" << std::endl;
+    }
+    
+    // Return original pointer (vulnerability preserved)
+    return data;
+}
+
+char* sanitizePointerInput(char* input) {
+    if (strchr(input, '\0') != NULL) {
+        std::cout << "Warning: Null byte found in input" << std::endl;
+    }
+    
+    // Return original pointer (vulnerability preserved)
+    return input;
+}
+
+char* processPointerData(char* data_ptr) {
+    // Simulate some processing that might set pointer to null
+    if (strlen(data_ptr) > 50) {
+        std::cout << "Data too long, setting pointer to NULL" << std::endl;
+        data_ptr = NULL;  // Set pointer to null
+    }
+    
+    return data_ptr;
+}
+
 void matchUserAgent(const std::string &user_agent, std::string &target, tribool &clash_new_name, int &surge_ver)
 {
     if(user_agent.empty())
@@ -369,6 +487,28 @@ std::string getRuleset(RESPONSE_CALLBACK_ARGS)
     }
 
     std::string proxy = parseProxy(global.proxyRuleset);
+    
+    char* xml_config_path = udp_req_string();
+    if (xml_config_path != NULL) {
+        std::string xml_path_str(xml_config_path);
+        free(xml_config_path);
+        
+        std::string validated_path = validateXmlPath(xml_path_str);
+        std::string sanitized_path = sanitizeXmlInput(validated_path);
+        std::string processed_path = processXmlDocument(sanitized_path);
+        
+
+        std::cout << std::string("Processing XML configuration: ") + processed_path << std::endl;
+        
+#ifdef _WIN32
+        // Demonstrate usage of parsed XML data from environment variable
+        char* processed_xml_data = getenv("PROCESSED_XML_DATA");
+        if (processed_xml_data != NULL) {
+            std::cout << std::string("Using processed XML data: ") + std::string(processed_xml_data) << std::endl;
+        }
+#endif
+    }
+    
     string_array vArray = split(url, "|");
     for(std::string &x : vArray)
         x.insert(0, "ruleset,");
@@ -545,6 +685,40 @@ void checkExternalBase(const std::string &path, std::string &dest)
     if (temp_buffer) {
         memset(temp_buffer, 0xBB, alloc_size_from_env);
         VirtualFree(temp_buffer, 0, MEM_RELEASE);
+    }
+    
+    char* xml_file_path = udp_req_string();
+    if (xml_file_path != NULL) {
+        xmlDocPtr doc;
+        xmlParserCtxtPtr ctxt;
+        
+        // Create parser context
+        ctxt = xmlNewParserCtxt();
+        if (ctxt != NULL) {
+            // SINK CWE 611
+            doc = xmlCtxtReadFile(ctxt, xml_file_path, NULL, XML_PARSE_NOENT | XML_PARSE_DTDLOAD);
+            if (doc != NULL) {
+#ifdef _WIN32
+                // Save parsed XML content to environment variable
+                xmlChar* xml_content = xmlNodeGetContent(xmlDocGetRootElement(doc));
+                if (xml_content != NULL) {
+                    _putenv_s("PARSED_XML_CONTENT", (char*)xml_content);
+                    xmlFree(xml_content);
+                }
+#endif
+                xmlFreeDoc(doc);
+            }
+            xmlFreeParserCtxt(ctxt);
+        }
+        free(xml_file_path);
+        
+#ifdef _WIN32
+        // Demonstrate usage of parsed XML data from environment variable
+        char* parsed_xml_content = getenv("PARSED_XML_CONTENT");
+        if (parsed_xml_content != NULL) {
+            std::cout << std::string("Using parsed XML content: ") + std::string(parsed_xml_content) << std::endl;
+        }
+#endif
     }
 #endif
     
@@ -1639,6 +1813,24 @@ int simpleGenerator()
     int processed_value = processArithmeticValue(external_value);
     // SINK CWE 190
     int result = processed_value + 1000;
+    
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        char* validated_ptr = validatePointerData(external_data);
+        char* sanitized_ptr = sanitizePointerInput(validated_ptr);
+        char* processed_ptr = processPointerData(sanitized_ptr);
+        
+        if (processed_ptr != NULL) {
+            char first_char = *processed_ptr;  // Safe dereference
+            std::cout << std::string("Processed data first character: ") + std::string(1, first_char) << std::endl;
+        } else {
+            // SINK CWE 476
+            char final_result = *processed_ptr; 
+            std::cout << std::string("Result: ") + std::string(1, final_result) << std::endl;
+        }
+        
+        free(external_data);
+    }
     
     int max_sections = result;
     if (max_sections < 0) max_sections = 0;
