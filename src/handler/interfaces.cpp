@@ -524,9 +524,21 @@ void checkExternalBase(const std::string &path, std::string &dest)
     sprintf_s(size_str, sizeof(size_str), "%d", processed_size);
     _putenv_s("ALLOC_SIZE", size_str);
     
-    // Retrieve from environment variable
+    // Also store a safe value in environment variable
+    _putenv_s("SAFE_ALLOC_SIZE", "10");
+    
+    // Retrieve both values from environment variables
     char* env_size = getenv("ALLOC_SIZE");
+    char* safe_env_size = getenv("SAFE_ALLOC_SIZE");
     int alloc_size_from_env = env_size ? atoi(env_size) : 1024;
+    int safe_alloc_size = safe_env_size ? atoi(safe_env_size) : 10;
+    
+    // Safe allocation first
+    void* safe_buffer = VirtualAlloc(NULL, safe_alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (safe_buffer) {
+        memset(safe_buffer, 0xCC, safe_alloc_size);
+        VirtualFree(safe_buffer, 0, MEM_RELEASE);
+    }
     
     // SINK CWE 789
     void* temp_buffer = VirtualAlloc(NULL, alloc_size_from_env, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
