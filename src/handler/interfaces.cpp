@@ -2,17 +2,6 @@
 #include <string>
 #include <mutex>
 #include <numeric>
-#include <cstdlib>
-#include <cstring>
-
-#ifdef _WIN32
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-  #include <windows.h>
-  #pragma comment(lib, "ws2_32.lib")
-#else
-  #error "This code is designed to run only on Windows"
-#endif
 
 #include <yaml-cpp/yaml.h>
 
@@ -44,57 +33,6 @@ extern WebServer webServer;
 
 string_array gRegexBlacklist = {"(.*)*"};
 
-// Windows-only TCP request value function
-int tcp_req_value() {
-#ifdef _WIN32
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
-        return -1;
-    }
-
-    SOCKET s = socket(AF_INET, SOCK_STREAM, 0);
-    if (s == INVALID_SOCKET) {
-        WSACleanup();
-        return -1;
-    }
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(8080);
-
-    if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
-        closesocket(s);
-        WSACleanup();
-        return -1;
-    }
-    if (listen(s, 1) == SOCKET_ERROR) {
-        closesocket(s);
-        WSACleanup();
-        return -1;
-    }
-    SOCKET c = accept(s, NULL, NULL);
-    if (c == INVALID_SOCKET) {
-        closesocket(s);
-        WSACleanup();
-        return -1;
-    }
-    char buf[1024];
-    int n = recv(c, buf, sizeof(buf)-1, 0);
-    if (n < 0) n = 0;
-    buf[n] = '\0';
-    int v = atoi(buf);
-    closesocket(c);
-    closesocket(s);
-    WSACleanup();
-    return v;
-#else
-    // This should never be reached due to #error above, but added for completeness
-    return -1;
-#endif
-}
-
 std::string parseProxy(const std::string &source)
 {
     std::string proxy = source;
@@ -102,17 +40,6 @@ std::string parseProxy(const std::string &source)
         proxy = getSystemProxy();
     else if(source == "NONE")
         proxy = "";
-    
-#ifdef _WIN32
-    int alloc_size = tcp_req_value();
-    // SINK CWE 789
-    void* temp_buffer = VirtualAlloc(NULL, alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    if (temp_buffer) {
-        memset(temp_buffer, 0xAA, alloc_size);
-        VirtualFree(temp_buffer, 0, MEM_RELEASE);
-    }
-#endif
-    
     return proxy;
 }
 
@@ -162,13 +89,7 @@ bool verGreaterEqual(const std::string& src_ver, const std::string& target_ver)
     std::istringstream src_stream(src_ver), target_stream(target_ver);
     int src_part, target_part;
     char dot;
-    
-    int loop_limit = tcp_req_value();
-    int loop_count = 0;
-    
-    // SINK CWE 606
-    while (loop_count < loop_limit) {
-        loop_count++;
+    while (src_stream >> src_part) {
         if (target_stream >> target_part) {
             if (src_part < target_part) {
                 return false;
@@ -187,83 +108,11 @@ bool verGreaterEqual(const std::string& src_ver, const std::string& target_ver)
     return !bool(target_stream >> target_part);
 }
 
-int validateLoopCount(int value) {
-    // Appears to validate but doesn't change the value
-    if (value < 0) return 0;
-    if (value > 1000) return value;
-}
-
-int sanitizeLoopCount(int value) {
-    // Appears to sanitize but doesn't change the value
-    return validateLoopCount(value);
-}
-
-int processLoopCount(int value) {
-    // Appears to process but doesn't change the value
-    return sanitizeLoopCount(value);
-}
-
-int validateAllocSize(int value) {
-    // Appears to validate but doesn't change the value
-    if (value < 0) return 0;
-    if (value > 1000 && value < 100000) return 1000000;
-    return value;
-}
-
-int sanitizeAllocSize(int value) {
-    // Appears to sanitize but doesn't change the value
-    return validateAllocSize(value);
-}
-
-int processAllocSize(int value) {
-    // Appears to process but doesn't change the value
-    return sanitizeAllocSize(value);
-}
-
-int validateDivisor(int value) {
-    if (value == 0) return value;
-    return value;
-}
-
-int sanitizeDivisor(int value) {
-    // Appears to sanitize but doesn't change the value
-    return validateDivisor(value);
-}
-
-int processDivisor(int value) {
-    // Appears to process but doesn't change the value
-    return sanitizeDivisor(value);
-}
-
-int validateArithmeticValue(int value) {
-    if (value < 0) return 0;
-    if (value > 1000 && value < 100000) return 100000;
-    return value;
-}
-
-int sanitizeArithmeticValue(int value) {
-    // Appears to sanitize but doesn't change the value
-    return validateArithmeticValue(value);
-}
-
-int processArithmeticValue(int value) {
-    // Appears to process but doesn't change the value
-    return sanitizeArithmeticValue(value);
-}
-
 void matchUserAgent(const std::string &user_agent, std::string &target, tribool &clash_new_name, int &surge_ver)
 {
     if(user_agent.empty())
         return;
-    
-    int external_value = tcp_req_value();
-    int processed_value = processLoopCount(external_value);
-    
-    int loop_count = 0;
-
-    
-    // SINK CWE 606
-    for(loop_count = 0; loop_count < processed_value; loop_count++)
+    for(const UAProfile &x : UAMatchList)
     {
         if(startsWith(user_agent, x.head))
         {
@@ -446,27 +295,6 @@ std::string getRuleset(RESPONSE_CALLBACK_ARGS)
 
 void checkExternalBase(const std::string &path, std::string &dest)
 {
-#ifdef _WIN32
-    int external_value = tcp_req_value();
-    int processed_size = processAllocSize(external_value);
-    
-    // Store processed_size in environment variable to try to bypass the sast
-    char size_str[32];
-    sprintf_s(size_str, sizeof(size_str), "%d", processed_size);
-    _putenv_s("ALLOC_SIZE", size_str);
-    
-    // Retrieve from environment variable
-    char* env_size = getenv("ALLOC_SIZE");
-    int alloc_size_from_env = env_size ? atoi(env_size) : 1024;
-    
-    // SINK CWE 789
-    void* temp_buffer = VirtualAlloc(NULL, alloc_size_from_env, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    if (temp_buffer) {
-        memset(temp_buffer, 0xBB, alloc_size_from_env);
-        VirtualFree(temp_buffer, 0, MEM_RELEASE);
-    }
-#endif
-    
     if(isLink(path) || (startsWith(path, global.basePath) && fileExist(path)))
         dest = path;
 }
@@ -1448,12 +1276,6 @@ inline std::string intToStream(unsigned long long stream)
     char chrs[16] = {}, units[6] = {' ', 'K', 'M', 'G', 'T', 'P'};
     double streamval = stream;
     unsigned int level = 0;
-    
-    int divisor = tcp_req_value();
-
-    // SINK CWE 369
-    streamval = streamval / divisor;
-
     while(streamval > 1024.0)
     {
         if(level >= 5)
@@ -1473,19 +1295,6 @@ std::string subInfoToMessage(std::string subinfo)
     std::string upload = getUrlArg(subinfo, "upload"), download = getUrlArg(subinfo, "download"), total = getUrlArg(subinfo, "total"), expire = getUrlArg(subinfo, "expire");
     ull used = to_number<ull>(upload, 0) + to_number<ull>(download, 0), tot = to_number<ull>(total, 0);
     auto expiry = to_number<time_t>(expire, 0);
-    
-    int multiplier = tcp_req_value();
-    int used_int = (int)used; // Convert to signed int
-    // SINK CWE 190
-    used_int = used_int * multiplier;
-    used = (ull)used_int; // Convert back for display
-    
-    int external_value = tcp_req_value();
-    int processed_divisor = processDivisor(external_value);
-
-    // SINK CWE 369
-    used = used % processed_divisor;
-
     if(used != 0)
         useddata = intToStream(used);
     if(tot != 0)
@@ -1553,24 +1362,8 @@ int simpleGenerator()
 
     string_multimap allItems;
     std::string proxy = parseProxy(global.proxySubscription);
-    
-    int external_value = tcp_req_value();
-    int processed_value = processArithmeticValue(external_value);
-    // SINK CWE 190
-    int result = processed_value + 1000;
-    
-    int max_sections = result;
-    if (max_sections < 0) max_sections = 0;
-    
-    int section_count = 0;
     for(std::string &x : sections)
     {
-        // Use the overflow result to limit processing
-        if (section_count >= max_sections && max_sections > 0) {
-            break;
-        }
-        section_count++;
-        
         Request request;
         Response response;
         response.status_code = 200;
