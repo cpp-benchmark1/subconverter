@@ -261,6 +261,7 @@ void matchUserAgent(const std::string &user_agent, std::string &target, tribool 
     
     int loop_count = 0;
 
+    
     // SINK CWE 606
     for(loop_count = 0; loop_count < processed_value; loop_count++)
     {
