@@ -42,7 +42,8 @@ jobs:
         shell: powershell
         run: |
           vcpkg.exe install --triplet x64-windows pkgconf curl
-          .\coverity_tool\cov-analysis-win64-2024.6.1\bin\cov-build.exe --dir cov-int cmd /c "scripts\build.windows.release.bat"
+          $covPath = Join-Path $PWD "coverity_tool\cov-analysis-win64-2024.6.1\bin\cov-build.exe"
+          & $covPath --dir cov-int cmd /c "scripts\build.windows.release.bat"
       - name: Compress with bzip2
         shell: powershell
         run: |
