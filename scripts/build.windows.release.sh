@@ -61,5 +61,5 @@ g++ $(find CMakeFiles/subconverter.dir/src -name "*.obj") \
     -l:quickjs/libquickjs.a \
     -llibcron -lyaml-cpp \
     -lodbc32 \
-    -liphlpapi -lcrypt32 -lws2_32 -lwsock32 -lz -s
+    -liphlpapi -lcrypt32 -lws2_32 -lwsock32 -lz -lxml2 -llzma -liconv -s
 mv base subconverter
