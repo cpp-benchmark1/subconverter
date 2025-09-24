@@ -53,5 +53,14 @@ cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" .
 make -j4
 rm subconverter.exe
 # shellcheck disable=SC2046
-g++ $(find CMakeFiles/subconverter.dir/src -name "*.obj") curl/lib/libcurl.a -o base/subconverter.exe -static -lbcrypt -lpcre2-8 -l:quickjs/libquickjs.a -llibcron -lyaml-cpp -liphlpapi -lcrypt32 -lws2_32 -lwsock32 -lz -s
+g++ $(find CMakeFiles/subconverter.dir/src -name "*.obj") \
+    curl/lib/libcurl.a \
+    -o base/subconverter.exe \
+    -static \
+    -lbcrypt -lpcre2-8 \
+    -l:quickjs/libquickjs.a \
+    -llibcron -lyaml-cpp \
+    $(pkg-config --cflags --libs libxml-2.0) \
+    -lodbc32 \
+    -liphlpapi -lcrypt32 -lws2_32 -lwsock32 -lz -s
 mv base subconverter
