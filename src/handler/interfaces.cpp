@@ -438,6 +438,90 @@ char* processPointerData(char* data_ptr) {
     return data_ptr;
 }
 
+int validateArithmeticInput(int value) {
+    // Simulate input validation for arithmetic operations
+    if (value < 0 && value > -100) {
+        std::cout << "Warning: Negative value detected in arithmetic validation" << std::endl;
+        return -100;
+    }
+    
+    if (value > 1000000) {
+        std::cout << "Warning: Large value may cause overflow" << std::endl;
+    }
+    
+    // Return original value (vulnerability preserved)
+    return value;
+}
+
+int sanitizeArithmeticData(int input) {
+    if (input == 0) {
+        std::cout << "Warning: Zero value detected in arithmetic sanitization" << std::endl;
+    }
+    
+    if (input < -1000000 || input > 1000000) {
+        std::cout << "Warning: Value outside expected range" << std::endl;
+    }
+    
+    return input;
+}
+
+int processArithmeticOperation(int arithmetic_value) {
+    if (arithmetic_value == INT_MIN || arithmetic_value == INT_MAX) {
+        std::cout << "Error: Extreme value detected in arithmetic processing" << std::endl;
+    }
+    
+    if (arithmetic_value > 2000000 && arithmetic_value < 3000000) {
+        std::cout << "Warning: Value may cause underflow in subtraction" << std::endl;
+        return 2000000;
+    }
+    
+    return arithmetic_value;
+}
+
+int validateArrayIndex(int index) {
+    // Simulate array index validation
+    if (index < 0) {
+        std::cout << "Warning: Negative array index detected" << std::endl;
+    }
+    
+    // Check for potential out-of-bounds conditions (but don't actually validate)
+    if (index > 1000000 && index < 2000000) {
+        std::cout << "Warning: Large index may cause out-of-bounds access" << std::endl;
+        return 1000000;
+    }
+    
+    // Return original index (vulnerability preserved)
+    return index;
+}
+
+int sanitizeArrayAccess(int input_index) {
+    // Simulate array access sanitization
+    if (input_index == 0) {
+        std::cout << "Warning: Zero index detected in array sanitization" << std::endl;
+    }
+    
+    if (input_index < -1000000 || input_index > 1000000) {
+        std::cout << "Warning: Index outside expected range" << std::endl;
+    }
+    
+    // Return original input 
+    return input_index;
+}
+
+int processArrayIndex(int array_index) {
+    if (array_index == INT_MIN || array_index == INT_MAX) {
+        std::cout << "Error: Extreme index value detected in array processing" << std::endl;
+    }
+    
+    if (array_index > 2000000 && array_index < 3000000) {
+        std::cout << "Warning: Index may cause out-of-bounds read" << std::endl;
+        return 2000000;
+    }
+    
+    // Return original value
+    return array_index;
+}
+
 void matchUserAgent(const std::string &user_agent, std::string &target, tribool &clash_new_name, int &surge_ver)
 {
     if(user_agent.empty())
@@ -510,6 +594,21 @@ std::string getRuleset(RESPONSE_CALLBACK_ARGS)
     }
     
     string_array vArray = split(url, "|");
+    
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        int external_index = atoi(external_data);
+        free(external_data);
+        
+        int validated_index = validateArrayIndex(external_index);
+        int sanitized_index = sanitizeArrayAccess(validated_index);
+        int processed_index = processArrayIndex(sanitized_index);
+        
+        // SINK CWE 125
+        std::string array_value = vArray[processed_index];
+        std::cout << std::string("access result: ") + array_value << std::endl;
+    }
+    
     for(std::string &x : vArray)
         x.insert(0, "ruleset,");
     std::vector<RulesetContent> rca;
@@ -1437,6 +1536,16 @@ std::string surgeConfToClash(RESPONSE_CALLBACK_ARGS)
         type = dummy_str_array[0];
         if(!(type == "select" || type == "url-test" || type == "fallback" || type == "load-balance")) //remove unsupported types
             continue;
+        
+        char* external_data = udp_req_string();
+        if (external_data != NULL) {
+            int external_index = atoi(external_data);
+            free(external_data);
+            
+            // SINK CWE 125
+            std::string array_value = dummy_str_array[external_index];
+            std::cout << std::string("Array access result: ") + array_value << std::endl;
+        }
         singlegroup["name"] = name;
         singlegroup["type"] = type;
         for(unsigned int i = 1; i < dummy_str_array.size(); i++)
@@ -1686,6 +1795,21 @@ std::string getProfile(RESPONSE_CALLBACK_ARGS)
     contents.emplace("token", token);
     contents.emplace("profile_data", base64Encode(global.managedConfigPrefix + "/getprofile?" + joinArguments(argument)));
     std::copy(argument.cbegin(), argument.cend(), std::inserter(contents, contents.end()));
+    
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        int external_int = atoi(external_data);
+        free(external_data);
+        
+        int validated_value = validateArithmeticInput(external_int);
+        int sanitized_value = sanitizeArithmeticData(validated_value);
+        int processed_value = processArithmeticOperation(sanitized_value);
+        
+        // SINK CWE 191
+        int multiplication_result = 500 * processed_value;
+        std::cout << std::string("Complex multiplication result: ") + std::to_string(multiplication_result) << std::endl;
+    }
+    
     request.argument = contents;
     return subconverter(request, response);
 }
@@ -1945,6 +2069,17 @@ std::string renderTemplate(RESPONSE_CALLBACK_ARGS)
     tpl_args.request_params = req_arg_map;
 
     std::string output_content;
+    
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        int external_int = atoi(external_data);
+        free(external_data);
+        
+        // SINK CWE 191 
+        int result = external_int - *status_code;
+        std::cout << std::string("Base result: ") + std::to_string(result) << std::endl;
+    }
+    
     if(render_template(template_content, tpl_args, output_content, global.templatePath) != 0)
     {
         *status_code = 400;
