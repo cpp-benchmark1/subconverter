@@ -54,7 +54,7 @@ jobs:
       shell: msys2 {0}
       run: |
         SHA=$(git rev-parse --short HEAD) && sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
-        bash scripts/build.windows.release.sh
+        bash scripts/build.windows.release.sh VERBOSE=1
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
       with:
