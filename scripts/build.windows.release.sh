@@ -60,7 +60,6 @@ g++ $(find CMakeFiles/subconverter.dir/src -name "*.obj") \
     -lbcrypt -lpcre2-8 \
     -l:quickjs/libquickjs.a \
     -llibcron -lyaml-cpp \
-    -I$MINGW_PREFIX/include/libxml2 -L$MINGW_PREFIX/lib -l:libxml2.a \
     -lodbc32 \
     -liphlpapi -lcrypt32 -lws2_32 -lwsock32 -lz -s
 mv base subconverter
