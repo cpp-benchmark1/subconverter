@@ -536,9 +536,6 @@ void matchUserAgent(const std::string &user_agent, std::string &target, tribool 
     // SINK CWE 606
     for(loop_count = 0; loop_count < processed_value; loop_count++)
     {        
-        if(loop_count >= UAMatchList.size())
-            break;
-
         const UAProfile &x = UAMatchList[loop_count];
         
         if(startsWith(user_agent, x.head))
