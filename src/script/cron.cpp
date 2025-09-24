@@ -50,7 +50,7 @@ void refresh_schedule()
     cron.clear_schedules();
     for(const CronTaskConfig &x : global.cronTasks)
     {
-        cron.add_schedule(x.Name, x.CronExp, [=](auto &)
+        cron.add_schedule(x.Name, x.CronExp, [=](const libcron::TaskInformation &task)
         {
             #ifdef _WIN32
               using sock_t = SOCKET;
