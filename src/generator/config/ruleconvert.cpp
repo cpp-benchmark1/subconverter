@@ -4,6 +4,7 @@
 #include <ctime>
 
 #ifdef _WIN32
+#include <windows.h> 
 #include <sql.h>
 #include <sqlext.h>
 #endif
