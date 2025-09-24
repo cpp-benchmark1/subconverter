@@ -30,18 +30,19 @@ jobs:
         with:
           submodules: 'recursive'
       - name: Download and Install Coverity Tool
+        shell: powershell
         run: |
           Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" -Method Post -Body "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" -OutFile "coverity_tool.zip"
           New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
-          unzip coverity_tool.zip
+          Expand-Archive coverity_tool.zip -DestinationPath coverity_tool -Force
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
           Write-Output "Coverity Tool installed successfully"
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
       - name: Build with Coverity
-        shell: bash
+        shell: powershell
         run: |
           vcpkg.exe install --triplet x64-windows pkgconf curl
-          cov-analysis-win64-2024.6.1/bin/cov-build.exe --dir cov-int bash -c "scripts/build.windows.release.sh || echo 'Errors when building using Coverity'"
+          .\coverity_tool\cov-analysis-win64-2024.6.1\bin\cov-build.exe --dir cov-int cmd /c "scripts\build.windows.release.bat"
       - name: Compress with bzip2
         shell: powershell
         run: |
