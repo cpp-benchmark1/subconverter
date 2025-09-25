@@ -39,18 +39,27 @@ jobs:
           Write-Output "Coverity Tool installed successfully"
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
           Get-ChildItem -Recurse coverity_tool
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
+          path-type: inherit
       - name: Build with Coverity
-        shell: powershell
+        shell: msys2 {0}
         run: |
           vcpkg.exe install --triplet x64-windows pkgconf curl
-          $covFolder = Get-ChildItem -Path coverity_tool -Directory | Where-Object { $_.Name -like 'cov-analysis-win64*' } | Select-Object -First 1
-          if (-not $covFolder) {
-            Write-Error "Não foi encontrada a pasta cov-analysis-win64 dentro de coverity_tool"
+          covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
+          if [ -z "$covFolder" ]; then
+            echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
             exit 1
-          }
-          $covPath = Join-Path $covFolder.FullName "bin\cov-build.exe"
-          Write-Host "Usando Coverity em: $covPath"
-          & $covPath --dir cov-int cmd /c "scripts\build.windows.release.bat"
+          fi
+          covPath="$covFolder/bin/cov-build.exe"
+          echo "Using Coverity at: $covPath"
+          SHA=$(git rev-parse --short HEAD)
+          sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
+          "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1"
       - name: Compress with bzip2
         shell: powershell
         run: |
@@ -67,6 +76,7 @@ jobs:
           body: "Automated Coverity Scan Results"
           draft: false
           prerelease: false
+
       - name: Upload Asset to Release
         uses: actions/upload-release-asset@v1
         env:
@@ -76,6 +86,7 @@ jobs:
           asset_path: myproject.zip
           asset_name: myproject.zip
           asset_content_type: application/x-bzip2
+
       - name: Notify Coverity Scan
         shell: powershell
         run: |
