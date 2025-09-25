@@ -382,52 +382,90 @@ struct js_traits<std::variant<Ts...>>
     static bool isCompatible(JSContext * ctx, JSValueConst v) noexcept
     {
         //const char * type_name = typeid(T).name();
-        switch(JS_VALUE_GET_TAG(v))
+        switch (JS_VALUE_GET_TAG(v))
         {
-            case JS_TAG_STRING:
-                return is_string<T>::value;
+            #ifdef JS_TAG_STRING
+                case JS_TAG_STRING:
+                    return is_string<T>::value;
+            #endif
 
-            case JS_TAG_FUNCTION_BYTECODE:
-                return std::is_function<T>::value;
-            case JS_TAG_OBJECT:
-                if(JS_IsArray(ctx, v) == 1)
-                    return is_vector<T>::value || is_pair<T>::value;
-                if constexpr (is_shared_ptr<T>::value)
-                {
-                    if(JS_GetClassID(v) == js_traits<T>::QJSClassId)
-                        return true;
-                }
-                return false;
+            #ifdef JS_TAG_FUNCTION_BYTECODE
+                case JS_TAG_FUNCTION_BYTECODE:
+                    return std::is_function<T>::value;
+            #endif
 
-            case JS_TAG_INT:
-                [[fallthrough]];
-            case JS_TAG_BIG_INT:
-                return std::is_integral_v<T> || std::is_floating_point_v<T>;
-            case JS_TAG_BOOL:
-                return is_boolean<T>::value || std::is_integral_v<T> || std::is_floating_point_v<T>;
+            #ifdef JS_TAG_OBJECT
+                case JS_TAG_OBJECT:
+                    if (JS_IsArray(ctx, v) == 1)
+                        return is_vector<T>::value || is_pair<T>::value;
+                    if constexpr (is_shared_ptr<T>::value)
+                    {
+                        if (JS_GetClassID(v) == js_traits<T>::QJSClassId)
+                            return true;
+                    }
+                    return false;
+            #endif
 
-            case JS_TAG_BIG_DECIMAL:
-                [[fallthrough]];
-            case JS_TAG_BIG_FLOAT:
-                [[fallthrough]];
-            case JS_TAG_FLOAT64:
-            default: // >JS_TAG_FLOAT64 (JS_NAN_BOXING)
-                return is_double<T>::value || std::is_floating_point_v<T>;
+            #ifdef JS_TAG_INT
+                case JS_TAG_INT:
+                    [[fallthrough]];
+            #endif
 
-            case JS_TAG_SYMBOL:
-                [[fallthrough]];
-            case JS_TAG_MODULE:
-                [[fallthrough]];
-            case JS_TAG_NULL:
-                [[fallthrough]];
-            case JS_TAG_UNDEFINED:
-                [[fallthrough]];
-            case JS_TAG_UNINITIALIZED:
-                [[fallthrough]];
-            case JS_TAG_CATCH_OFFSET:
-                [[fallthrough]];
-            case JS_TAG_EXCEPTION:
-                break;
+            #ifdef JS_TAG_BIG_INT
+                case JS_TAG_BIG_INT:
+                    return std::is_integral_v<T> || std::is_floating_point_v<T>;
+            #endif
+
+            #ifdef JS_TAG_BOOL
+                case JS_TAG_BOOL:
+                    return is_boolean<T>::value || std::is_integral_v<T> || std::is_floating_point_v<T>;
+            #endif
+
+            #ifdef JS_TAG_BIG_DECIMAL
+                case JS_TAG_BIG_DECIMAL:
+                    [[fallthrough]];
+            #endif
+
+            #ifdef JS_TAG_BIG_FLOAT
+                case JS_TAG_BIG_FLOAT:
+                    [[fallthrough]];
+            #endif
+
+            #ifdef JS_TAG_FLOAT64
+                case JS_TAG_FLOAT64:
+            #endif
+                default: // >JS_TAG_FLOAT64 (JS_NAN_BOXING)
+                    return is_double<T>::value || std::is_floating_point_v<T>;
+
+            #ifdef JS_TAG_SYMBOL
+                case JS_TAG_SYMBOL:
+                    [[fallthrough]];
+            #endif
+            #ifdef JS_TAG_MODULE
+                case JS_TAG_MODULE:
+                    [[fallthrough]];
+            #endif
+            #ifdef JS_TAG_NULL
+                case JS_TAG_NULL:
+                    [[fallthrough]];
+            #endif
+            #ifdef JS_TAG_UNDEFINED
+                case JS_TAG_UNDEFINED:
+                    [[fallthrough]];
+            #endif
+            #ifdef JS_TAG_UNINITIALIZED
+                case JS_TAG_UNINITIALIZED:
+                    [[fallthrough]];
+            #endif
+            #ifdef JS_TAG_CATCH_OFFSET
+                case JS_TAG_CATCH_OFFSET:
+                    [[fallthrough]];
+            #endif
+            #ifdef JS_TAG_EXCEPTION
+                case JS_TAG_EXCEPTION:
+                    [[fallthrough]];
+            #endif
+                    break;
         }
         return false;
     }
@@ -435,6 +473,9 @@ struct js_traits<std::variant<Ts...>>
     static std::variant<Ts...> unwrap(JSContext * ctx, JSValueConst v)
     {
         const auto tag = JS_VALUE_GET_TAG(v);
+
+
+
         switch(tag)
         {
             case JS_TAG_STRING:
@@ -442,19 +483,19 @@ struct js_traits<std::variant<Ts...>>
 
             case JS_TAG_FUNCTION_BYTECODE:
                 return unwrapPriority<std::is_function>(ctx, v);
+
             case JS_TAG_OBJECT:
-                if(auto result = unwrapObj<Ts...>(ctx, v, JS_GetClassID(v)))
-                {
+                if (auto result = unwrapObj<Ts...>(ctx, v, JS_GetClassID(v)))
                     return *result;
-                }
                 JS_ThrowTypeError(ctx, "Expected type %s, got object with classid %d",
-                                  QJSPP_TYPENAME(std::variant<Ts...>), JS_GetClassID(v));
+                                QJSPP_TYPENAME(std::variant<Ts...>), JS_GetClassID(v));
                 break;
 
             case JS_TAG_INT:
                 [[fallthrough]];
             case JS_TAG_BIG_INT:
                 return unwrapPriority<std::is_integral, std::is_floating_point>(ctx, v);
+
             case JS_TAG_BOOL:
                 return unwrapPriority<is_boolean, std::is_integral, std::is_floating_point>(ctx, v);
 
@@ -474,17 +515,23 @@ struct js_traits<std::variant<Ts...>>
             case JS_TAG_EXCEPTION:
                 break;
 
+        #ifdef JS_TAG_BIG_DECIMAL
             case JS_TAG_BIG_DECIMAL:
                 [[fallthrough]];
+        #endif
+        #ifdef JS_TAG_BIG_FLOAT
             case JS_TAG_BIG_FLOAT:
                 [[fallthrough]];
-
+        #endif
+        #ifdef JS_TAG_FLOAT64
             case JS_TAG_FLOAT64:
                 [[fallthrough]];
+        #endif
             default: // more than JS_TAG_FLOAT64 (nan boxing)
                 return unwrapPriority<is_double, std::is_floating_point>(ctx, v);
         }
 
+        
         throw exception{ctx};
     }
 };
