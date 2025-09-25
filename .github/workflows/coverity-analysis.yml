@@ -35,22 +35,19 @@ jobs:
       - name: Download and Install Coverity Tool
         shell: powershell
         run: |
-          # Download Coverity tool using curl (follows redirects)
-          curl.exe -L -X POST -d "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" `
-            "https://scan.coverity.com/download/win64" -o coverity_tool.zip
-
-          # Check if the ZIP is valid / not empty
-          if ((Get-Item coverity_tool.zip).Length -eq 0) {
-              Write-Error "Coverity download failed (empty file or wrong credentials)"
-              exit 1
-          }
-
-          # Extract Coverity tool
+          $zipPath = "coverity_tool.zip"
+          Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" `
+            -Method Post `
+            -Body "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" `
+            -OutFile $zipPath
           New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
-          Expand-Archive coverity_tool.zip -DestinationPath coverity_tool -Force
+          Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
+
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
-          Write-Output "Coverity Tool installed successfully"
+
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
+
+          Write-Output "Coverity Tool installed successfully"
           Get-ChildItem -Recurse coverity_tool
 
       - name: Setup MSYS2
@@ -64,19 +61,21 @@ jobs:
       - name: Build with Coverity
         shell: msys2 {0}
         run: |
-          vcpkg.exe install --triplet x64-windows pkgconf curl
           covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
           if [ -z "$covFolder" ]; then
             echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
             exit 1
           fi
+
           covPath="$covFolder/bin/cov-build.exe"
           echo "Using Coverity at: $covPath"
+
           SHA=$(git rev-parse --short HEAD)
           sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
+
           "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1"
 
-      - name: Compress results
+      - name: Compress Results
         shell: powershell
         run: |
           Compress-Archive -Path cov-int -DestinationPath myproject.zip
