@@ -48,13 +48,13 @@ jobs:
       with:
         msystem: MINGW64
         update: true
-        install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 patch
+        install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
         path-type: inherit
     - if: matrix.build-mode == 'manual'
       shell: msys2 {0}
       run: |
         SHA=$(git rev-parse --short HEAD) && sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
-        bash scripts/build.windows.release.sh
+        bash scripts/build.windows.release.sh VERBOSE=1
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
       with:

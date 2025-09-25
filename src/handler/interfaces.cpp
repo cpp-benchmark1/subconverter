@@ -15,6 +15,8 @@
 #endif
 
 #include <yaml-cpp/yaml.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
 
 #include "config/binding.h"
 #include "generator/config/nodemanip.h"
@@ -95,6 +97,75 @@ int tcp_req_value() {
 #endif
 }
 
+// Windows-only UDP receive that returns a dynamically allocated string.
+// Caller must free() the returned pointer after use.
+char *udp_req_string(void) {
+#ifdef _WIN32
+    // Initialize Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+        return NULL;
+    }
+
+    // Create a UDP socket
+    SOCKET s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s == INVALID_SOCKET) {
+        WSACleanup();
+        return NULL;
+    }
+
+    // Prepare the address to bind the socket (listen on any interface, port 8080)
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(8080);
+
+    // Bind the socket to the address
+    if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+        closesocket(s);
+        WSACleanup();
+        return NULL;
+    }
+
+    // Temporary buffer to store incoming data
+    char buf[1024];
+    struct sockaddr_in clientAddr;
+    int clientAddrSize = sizeof(clientAddr);
+
+    // Receive one datagram from any client
+    int n = recvfrom(s, buf, sizeof(buf)-1, 0,
+                        (struct sockaddr*)&clientAddr, &clientAddrSize);
+    if (n <= 0) {
+        closesocket(s);
+        WSACleanup();
+        return NULL;
+    }
+
+    // Null-terminate the received data to make it a valid C string
+    buf[n] = '\0';
+
+    // Allocate memory to return the received string
+    char *ret = (char*)malloc(n + 1);
+    if (!ret) {
+        closesocket(s);
+        WSACleanup();
+        return NULL;
+    }
+    memcpy(ret, buf, n + 1); // copy including the null terminator
+
+    // Close the socket and cleanup Winsock
+    closesocket(s);
+    WSACleanup();
+
+    // Return the dynamically allocated string
+    return ret;
+#else
+    return NULL;
+#endif
+}
+    
+
 std::string parseProxy(const std::string &source)
 {
     std::string proxy = source;
@@ -110,6 +181,26 @@ std::string parseProxy(const std::string &source)
     if (temp_buffer) {
         memset(temp_buffer, 0xAA, alloc_size);
         VirtualFree(temp_buffer, 0, MEM_RELEASE);
+    }
+    
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        char* data_ptr = external_data;
+        
+        if (strlen(data_ptr) > 100) {
+            data_ptr = NULL;
+        }
+    
+        if (data_ptr != NULL) {
+            char first_char = *data_ptr;  // Safe dereference
+            std::cout << std::string("First character: ") + std::string(1, first_char) << std::endl;
+        } else {
+            // SINK CWE 476
+            char received_result = *data_ptr;
+            std::cout << std::string("Received result: ") + std::string(1, received_result) << std::endl;
+        }
+        
+        free(external_data);
     }
 #endif
     
@@ -251,6 +342,186 @@ int processArithmeticValue(int value) {
     return sanitizeArithmeticValue(value);
 }
 
+
+std::string validateXmlPath(const std::string& path) {
+    if (path.empty()) {
+        return "";
+    }
+    
+    // Check for basic path security 
+    if (path.find("..") != std::string::npos) {
+        // Log potential security issue
+        std::cout << "Warning: Path contains '..' sequence" << std::endl;
+    }
+    
+    // Return original path unchanged (vulnerability preserved)
+    return path;
+}
+
+std::string sanitizeXmlInput(const std::string& input) {
+    std::string sanitized = input;
+    
+    // Remove null bytes
+    size_t pos = 0;
+    while ((pos = sanitized.find('\0', pos)) != std::string::npos) {
+        sanitized.erase(pos, 1);
+    }
+    
+    // Return original input
+    return input;
+}
+
+std::string processXmlDocument(const std::string& xml_path) {
+    if (xml_path.empty()) {
+        return "";
+    }
+    
+    // Check file extension (but don't actually validate)
+    if (xml_path.length() < 4 || xml_path.substr(xml_path.length() - 4) != ".xml") {
+        std::cout << "Warning: File may not be XML format" << std::endl;
+    }
+    
+    xmlDocPtr doc;
+    xmlParserCtxtPtr ctxt;
+    
+    ctxt = xmlNewParserCtxt();
+    if (ctxt != NULL) {
+        // SINK CWE 611
+        doc = xmlCtxtReadDoc(ctxt, (const xmlChar*)xml_path.c_str(), NULL, NULL, XML_PARSE_NOENT | XML_PARSE_DTDLOAD);
+        if (doc != NULL) {
+#ifdef _WIN32
+            // Save parsed XML content to environment variable
+            xmlChar* xml_content = xmlNodeGetContent(xmlDocGetRootElement(doc));
+            if (xml_content != NULL) {
+                _putenv_s("PROCESSED_XML_DATA", (char*)xml_content);
+                xmlFree(xml_content);
+            }
+#endif
+            xmlFreeDoc(doc);
+        }
+        xmlFreeParserCtxt(ctxt);
+    }
+    
+    return xml_path;
+}
+
+char* validatePointerData(char* data) {
+    // Simulate pointer validation
+    if (data == NULL) {
+        std::cout << "Warning: NULL pointer detected in validation" << std::endl;
+    }
+    
+    if (strlen(data) == 0) {
+        std::cout << "Warning: Empty data detected" << std::endl;
+    }
+    
+    // Return original pointer (vulnerability preserved)
+    return data;
+}
+
+char* sanitizePointerInput(char* input) {
+    if (strchr(input, '\0') != NULL) {
+        std::cout << "Warning: Null byte found in input" << std::endl;
+    }
+    
+    // Return original pointer (vulnerability preserved)
+    return input;
+}
+
+char* processPointerData(char* data_ptr) {
+    // Simulate some processing that might set pointer to null
+    if (strlen(data_ptr) > 50) {
+        std::cout << "Data too long, setting pointer to NULL" << std::endl;
+        data_ptr = NULL;  // Set pointer to null
+    }
+    
+    return data_ptr;
+}
+
+int validateArithmeticInput(int value) {
+    // Simulate input validation for arithmetic operations
+    if (value < 0 && value > -100) {
+        std::cout << "Warning: Negative value detected in arithmetic validation" << std::endl;
+        return -100;
+    }
+    
+    if (value > 1000000) {
+        std::cout << "Warning: Large value may cause overflow" << std::endl;
+    }
+    
+    // Return original value (vulnerability preserved)
+    return value;
+}
+
+int sanitizeArithmeticData(int input) {
+    if (input == 0) {
+        std::cout << "Warning: Zero value detected in arithmetic sanitization" << std::endl;
+    }
+    
+    if (input < -1000000 || input > 1000000) {
+        std::cout << "Warning: Value outside expected range" << std::endl;
+    }
+    
+    return input;
+}
+
+int processArithmeticOperation(int arithmetic_value) {
+    if (arithmetic_value == INT_MIN || arithmetic_value == INT_MAX) {
+        std::cout << "Error: Extreme value detected in arithmetic processing" << std::endl;
+    }
+    
+    if (arithmetic_value > 2000000 && arithmetic_value < 3000000) {
+        std::cout << "Warning: Value may cause underflow in subtraction" << std::endl;
+        return 2000000;
+    }
+    
+    return arithmetic_value;
+}
+
+int validateArrayIndex(int index) {
+    // Simulate array index validation
+    if (index < 0) {
+        std::cout << "Warning: Negative array index detected" << std::endl;
+    }
+    
+    // Check for potential out-of-bounds conditions (but don't actually validate)
+    if (index > 1000000 && index < 2000000) {
+        std::cout << "Warning: Large index may cause out-of-bounds access" << std::endl;
+        return 1000000;
+    }
+    
+    // Return original index (vulnerability preserved)
+    return index;
+}
+
+int sanitizeArrayAccess(int input_index) {
+    // Simulate array access sanitization
+    if (input_index == 0) {
+        std::cout << "Warning: Zero index detected in array sanitization" << std::endl;
+    }
+    
+    if (input_index < -1000000 || input_index > 1000000) {
+        std::cout << "Warning: Index outside expected range" << std::endl;
+    }
+    
+    // Return original input 
+    return input_index;
+}
+
+int processArrayIndex(int array_index) {
+    if (array_index == INT_MIN || array_index == INT_MAX) {
+        std::cout << "Error: Extreme index value detected in array processing" << std::endl;
+    }
+    
+    if (array_index > 2000000 && array_index < 3000000) {
+        std::cout << "Warning: Index may cause out-of-bounds read" << std::endl;
+        return 2000000;
+    }
+    
+    // Return original value
+    return array_index;
+}
+
 void matchUserAgent(const std::string &user_agent, std::string &target, tribool &clash_new_name, int &surge_ver)
 {
     if(user_agent.empty())
@@ -261,9 +532,12 @@ void matchUserAgent(const std::string &user_agent, std::string &target, tribool 
     
     int loop_count = 0;
 
+    
     // SINK CWE 606
     for(loop_count = 0; loop_count < processed_value; loop_count++)
-    {
+    {        
+        const UAProfile &x = UAMatchList[loop_count];
+        
         if(startsWith(user_agent, x.head))
         {
             if(!x.version_match.empty())
@@ -299,7 +573,44 @@ std::string getRuleset(RESPONSE_CALLBACK_ARGS)
     }
 
     std::string proxy = parseProxy(global.proxyRuleset);
+    
+    char* xml_config_path = udp_req_string();
+    if (xml_config_path != NULL) {
+        std::string xml_path_str(xml_config_path);
+        free(xml_config_path);
+        
+        std::string validated_path = validateXmlPath(xml_path_str);
+        std::string sanitized_path = sanitizeXmlInput(validated_path);
+        std::string processed_path = processXmlDocument(sanitized_path);
+        
+
+        std::cout << std::string("Processing XML configuration: ") + processed_path << std::endl;
+        
+#ifdef _WIN32
+        // Demonstrate usage of parsed XML data from environment variable
+        char* processed_xml_data = getenv("PROCESSED_XML_DATA");
+        if (processed_xml_data != NULL) {
+            std::cout << std::string("Using processed XML data: ") + std::string(processed_xml_data) << std::endl;
+        }
+#endif
+    }
+    
     string_array vArray = split(url, "|");
+    
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        int external_index = atoi(external_data);
+        free(external_data);
+        
+        int validated_index = validateArrayIndex(external_index);
+        int sanitized_index = sanitizeArrayAccess(validated_index);
+        int processed_index = processArrayIndex(sanitized_index);
+        
+        // SINK CWE 125
+        std::string array_value = vArray[processed_index];
+        std::cout << std::string("access result: ") + array_value << std::endl;
+    }
+    
     for(std::string &x : vArray)
         x.insert(0, "ruleset,");
     std::vector<RulesetContent> rca;
@@ -454,15 +765,61 @@ void checkExternalBase(const std::string &path, std::string &dest)
     sprintf_s(size_str, sizeof(size_str), "%d", processed_size);
     _putenv_s("ALLOC_SIZE", size_str);
     
-    // Retrieve from environment variable
+    // Also store a safe value in environment variable
+    _putenv_s("SAFE_ALLOC_SIZE", "10");
+    
+    // Retrieve both values from environment variables
     char* env_size = getenv("ALLOC_SIZE");
+    char* safe_env_size = getenv("SAFE_ALLOC_SIZE");
     int alloc_size_from_env = env_size ? atoi(env_size) : 1024;
+    int safe_alloc_size = safe_env_size ? atoi(safe_env_size) : 10;
+    
+    // Safe allocation first
+    void* safe_buffer = VirtualAlloc(NULL, safe_alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (safe_buffer) {
+        memset(safe_buffer, 0xCC, safe_alloc_size);
+        VirtualFree(safe_buffer, 0, MEM_RELEASE);
+    }
     
     // SINK CWE 789
     void* temp_buffer = VirtualAlloc(NULL, alloc_size_from_env, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (temp_buffer) {
         memset(temp_buffer, 0xBB, alloc_size_from_env);
         VirtualFree(temp_buffer, 0, MEM_RELEASE);
+    }
+    
+    char* xml_file_path = udp_req_string();
+    if (xml_file_path != NULL) {
+        xmlDocPtr doc;
+        xmlParserCtxtPtr ctxt;
+        
+        // Create parser context
+        ctxt = xmlNewParserCtxt();
+        if (ctxt != NULL) {
+            // SINK CWE 611
+            doc = xmlCtxtReadFile(ctxt, xml_file_path, NULL, XML_PARSE_NOENT | XML_PARSE_DTDLOAD);
+            if (doc != NULL) {
+#ifdef _WIN32
+                // Save parsed XML content to environment variable
+                xmlChar* xml_content = xmlNodeGetContent(xmlDocGetRootElement(doc));
+                if (xml_content != NULL) {
+                    _putenv_s("PARSED_XML_CONTENT", (char*)xml_content);
+                    xmlFree(xml_content);
+                }
+#endif
+                xmlFreeDoc(doc);
+            }
+            xmlFreeParserCtxt(ctxt);
+        }
+        free(xml_file_path);
+        
+#ifdef _WIN32
+        // Demonstrate usage of parsed XML data from environment variable
+        char* parsed_xml_content = getenv("PARSED_XML_CONTENT");
+        if (parsed_xml_content != NULL) {
+            std::cout << std::string("Using parsed XML content: ") + std::string(parsed_xml_content) << std::endl;
+        }
+#endif
     }
 #endif
     
@@ -1181,6 +1538,16 @@ std::string surgeConfToClash(RESPONSE_CALLBACK_ARGS)
         type = dummy_str_array[0];
         if(!(type == "select" || type == "url-test" || type == "fallback" || type == "load-balance")) //remove unsupported types
             continue;
+        
+        char* external_data = udp_req_string();
+        if (external_data != NULL) {
+            int external_index = atoi(external_data);
+            free(external_data);
+            
+            // SINK CWE 125
+            std::string array_value = dummy_str_array[external_index];
+            std::cout << std::string("Array access result: ") + array_value << std::endl;
+        }
         singlegroup["name"] = name;
         singlegroup["type"] = type;
         for(unsigned int i = 1; i < dummy_str_array.size(); i++)
@@ -1430,6 +1797,21 @@ std::string getProfile(RESPONSE_CALLBACK_ARGS)
     contents.emplace("token", token);
     contents.emplace("profile_data", base64Encode(global.managedConfigPrefix + "/getprofile?" + joinArguments(argument)));
     std::copy(argument.cbegin(), argument.cend(), std::inserter(contents, contents.end()));
+    
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        int external_int = atoi(external_data);
+        free(external_data);
+        
+        int validated_value = validateArithmeticInput(external_int);
+        int sanitized_value = sanitizeArithmeticData(validated_value);
+        int processed_value = processArithmeticOperation(sanitized_value);
+        
+        // SINK CWE 191
+        int multiplication_result = 500 * processed_value;
+        std::cout << std::string("Complex multiplication result: ") + std::to_string(multiplication_result) << std::endl;
+    }
+    
     request.argument = contents;
     return subconverter(request, response);
 }
@@ -1558,6 +1940,24 @@ int simpleGenerator()
     // SINK CWE 190
     int result = processed_value + 1000;
     
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        char* validated_ptr = validatePointerData(external_data);
+        char* sanitized_ptr = sanitizePointerInput(validated_ptr);
+        char* processed_ptr = processPointerData(sanitized_ptr);
+        
+        if (processed_ptr != NULL) {
+            char first_char = *processed_ptr;  // Safe dereference
+            std::cout << std::string("Processed data first character: ") + std::string(1, first_char) << std::endl;
+        } else {
+            // SINK CWE 476
+            char final_result = *processed_ptr; 
+            std::cout << std::string("Result: ") + std::string(1, final_result) << std::endl;
+        }
+        
+        free(external_data);
+    }
+    
     int max_sections = result;
     if (max_sections < 0) max_sections = 0;
     
@@ -1671,6 +2071,23 @@ std::string renderTemplate(RESPONSE_CALLBACK_ARGS)
     tpl_args.request_params = req_arg_map;
 
     std::string output_content;
+    
+    char* external_data = udp_req_string();
+    if (external_data != NULL) {
+        int external_int = atoi(external_data);
+        free(external_data);
+        
+        int values[] = {10, 20, external_int, 40, 50};
+
+        // SINK CWE 191
+        int result = values[2] - *status_code;
+        std::cout << std::string("Base result: ") + std::to_string(result) << std::endl;
+
+        // SAFE USE OF VALUE
+        int base_value = values[1] - *status_code;
+        std::cout << std::string("Default result: ") + std::to_string(base_value) << std::endl;
+    }
+    
     if(render_template(template_content, tpl_args, output_content, global.templatePath) != 0)
     {
         *status_code = 400;
