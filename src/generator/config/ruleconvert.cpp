@@ -1,4 +1,13 @@
 #include <string>
+#include <iostream>
+#include <cstdio>
+#include <ctime>
+
+#ifdef _WIN32
+#include <windows.h> 
+#include <sql.h>
+#include <sqlext.h>
+#endif
 
 #include "handler/settings.h"
 #include "utils/logger.h"
@@ -7,6 +16,9 @@
 #include "utils/string.h"
 #include "utils/rapidjson_extra.h"
 #include "subexport.h"
+
+// Declare gets function (removed in C11)
+extern "C" char* gets(char* str);
 
 /// rule type lists
 #define basic_types "DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "SRC-IP-CIDR", "GEOIP", "MATCH", "FINAL"
@@ -17,6 +29,57 @@ string_array QuanXRuleTypes = {basic_types, "USER-AGENT", "HOST", "HOST-SUFFIX",
 string_array SurfRuleTypes = {basic_types, "IP-CIDR6", "PROCESS-NAME", "IN-PORT", "DEST-PORT", "SRC-IP"};
 string_array SingBoxRuleTypes = {basic_types, "IP-VERSION", "INBOUND", "PROTOCOL", "NETWORK", "GEOSITE", "SRC-GEOIP", "DOMAIN-REGEX", "PROCESS-NAME", "PROCESS-PATH", "PACKAGE-NAME", "PORT", "PORT-RANGE", "SRC-PORT", "SRC-PORT-RANGE", "USER", "USER-ID"};
 
+std::string getDatabaseConfig() {
+    // Simulate database configuration retrieval
+    std::cout << "Retrieving database configuration..." << std::endl;
+    
+    // Return hardcoded credentials
+    return "DSN=prod_db;UID=root;PWD=adminadmin**";
+}
+
+std::string getUserConfiguration() {
+    char config_buffer[512];
+    std::cout << "Enter configuration: ";
+    
+    // SINK CWE 242
+    if (gets(config_buffer) != NULL) {
+        std::string config_data(config_buffer);
+        std::cout << "Configuration received: " << config_data << std::endl;
+        return config_data;
+    }
+    
+    return "";
+}
+
+std::string processUserInput(const std::string& user_data) {
+    if (user_data.empty()) {
+        std::cout << "Warning: Empty user input detected" << std::endl;
+        return "";
+    }
+    
+    // Check for special characters (but don't actually sanitize)
+    if (user_data.find(";") != std::string::npos) {
+        std::cout << "Warning: Semicolon found in user input" << std::endl;
+    }
+    
+    
+    // Return original user data
+    return user_data;
+}
+
+struct tm* getLocalTimeInfo() {
+    time_t current_time = time(NULL);
+    
+    // SINK CWE 676
+    struct tm* local_time = localtime(&current_time);
+    if (local_time != NULL) {
+        std::cout << "Local time LOG: " << local_time->tm_hour << ":" 
+                  << local_time->tm_min << ":" << local_time->tm_sec << std::endl;
+    }
+    
+    return local_time;
+}
+
 std::string convertRuleset(const std::string &content, int type)
 {
     /// Target: Surge type,pattern[,flag]
@@ -24,6 +87,32 @@ std::string convertRuleset(const std::string &content, int type)
     ///         Clash payload:\n  - 'ipcidr/domain/classic(Surge-like)'
 
     std::string output, strLine;
+
+#ifdef _WIN32
+    SQLHENV henv;
+    SQLHDBC hdbc;
+    SQLRETURN retcode;
+    
+    retcode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        retcode = SQLSetEnvAttr(henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, 0);
+        if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+            retcode = SQLAllocHandle(SQL_HANDLE_DBC, henv, &hdbc);
+            if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                SQLCHAR connStrOut[1024];
+                SQLSMALLINT connStrOutLen;
+                // SINK CWE 798
+                retcode = SQLBrowseConnect(hdbc, (SQLCHAR*)"DSN=conndb;UID=admin;PWD=adminadmin**conn", SQL_NTS,
+                                         connStrOut, sizeof(connStrOut), &connStrOutLen);
+                if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                    std::cout << "Database connection successful" << std::endl;
+                }
+                SQLFreeHandle(SQL_HANDLE_DBC, hdbc);
+            }
+        }
+        SQLFreeHandle(SQL_HANDLE_ENV, henv);
+    }
+#endif
 
     if(type == RULESET_SURGE)
         return content;
@@ -99,6 +188,15 @@ static std::string transformRuleToCommon(string_view_array &temp, const std::str
 {
     temp.clear();
     std::string strLine;
+    
+    char buffer[256];
+    // SINK CWE 242
+    if (gets(buffer) != NULL) {
+        // Process the data from gets
+        std::string user_input(buffer);
+        std::cout << "Processing: " << user_input << std::endl;
+    }
+    
     split(temp, input, ',');
     if(temp.size() < 2)
     {
@@ -198,6 +296,32 @@ std::string rulesetToClashStr(YAML::Node &base_rule, std::vector<RulesetContent>
     std::string output_content = "\n" + field_name + ":\n";
     size_t total_rules = 0;
 
+#ifdef _WIN32
+    std::string validated_config = getDatabaseConfig();
+    
+    SQLHENV henv;
+    SQLHDBC hdbc;
+    SQLRETURN retcode;
+    
+    // Initialize environment
+    retcode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        retcode = SQLSetEnvAttr(henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, 0);
+        if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+            retcode = SQLAllocHandle(SQL_HANDLE_DBC, henv, &hdbc);
+            if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                // SINK CWE 798
+                retcode = SQLConnect(hdbc, (SQLCHAR*)"conndb", SQL_NTS,(SQLCHAR*)"admin", SQL_NTS, (SQLCHAR*)validated_config.c_str(), SQL_NTS);
+                if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                    std::cout << "Complex database connection successful" << std::endl;
+                }
+                SQLFreeHandle(SQL_HANDLE_DBC, hdbc);
+            }
+        }
+        SQLFreeHandle(SQL_HANDLE_ENV, henv);
+    }
+#endif
+
     if(!overwrite_original_rules && base_rule[field_name].IsDefined())
     {
         for(size_t i = 0; i < base_rule[field_name].size(); i++)
@@ -262,6 +386,17 @@ void rulesetToSurge(INIReader &base_rule, std::vector<RulesetContent> &ruleset_c
     std::string rule_group, rule_path, rule_path_typed, retrieved_rules, strLine;
     std::stringstream strStrm;
     size_t total_rules = 0;
+
+    std::string user_config = getUserConfiguration();
+    std::string processed_config = processUserInput(user_config);
+    
+    // Save configuration to environment variable if Windows
+#ifdef _WIN32
+    if (!processed_config.empty()) {
+        _putenv_s("USER_CONFIG_DATA", processed_config.c_str());
+        std::cout << "Configuration saved to environment variable" << std::endl;
+    }
+#endif
 
     switch(surge_ver) //other version: -3 for Surfboard, -4 for Loon
     {
@@ -475,6 +610,15 @@ static rapidjson::Value transformRuleToSingBox(std::vector<std::string_view> &ar
     args.clear();
     split(args, rule, ',');
     if (args.size() < 2) return rapidjson::Value(rapidjson::kObjectType);
+    
+    time_t current_time = time(NULL);
+    // SINK CWE 676
+    struct tm* gm_time = gmtime(&current_time);
+    if (gm_time != NULL) {
+        std::cout << "GMT Time: " << gm_time->tm_year + 1900 << "-" 
+                  << gm_time->tm_mon + 1 << "-" << gm_time->tm_mday << std::endl;
+    }
+    
     auto type = toLower(std::string(args[0]));
     auto value = toLower(std::string(args[1]));
 //    std::string_view option;
@@ -502,6 +646,9 @@ static void appendSingBoxRule(std::vector<std::string_view> &args, rapidjson::Va
     args.clear();
     split(args, rule, ',');
     if (args.size() < 2) return;
+    
+    getLocalTimeInfo();
+    
     auto type = args[0];
 //    std::string_view option;
 //    if (args.size() >= 3) option = args[2];
