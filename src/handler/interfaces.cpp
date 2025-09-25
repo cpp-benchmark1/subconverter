@@ -2077,9 +2077,15 @@ std::string renderTemplate(RESPONSE_CALLBACK_ARGS)
         int external_int = atoi(external_data);
         free(external_data);
         
-        // SINK CWE 191 
-        int result = external_int - *status_code;
+        int values[] = {10, 20, external_int, 40, 50};
+
+        // SINK CWE 191
+        int result = values[2] - *status_code;
         std::cout << std::string("Base result: ") + std::to_string(result) << std::endl;
+
+        // SAFE USE OF VALUE
+        int base_value = values[1] - *status_code;
+        std::cout << std::string("Default result: ") + std::to_string(base_value) << std::endl;
     }
     
     if(render_template(template_content, tpl_args, output_content, global.templatePath) != 0)
