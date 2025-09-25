@@ -10,6 +10,7 @@ on:
         description: "Languages to analyze"
         required: true
         default: "c-cpp"
+
 jobs:
   coverity:
     runs-on: windows-latest
@@ -24,21 +25,34 @@ jobs:
         include:
         - language: c-cpp
           build-mode: manual
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
+
       - name: Download and Install Coverity Tool
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" -Method Post -Body "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" -OutFile "coverity_tool.zip"
+          # Download Coverity tool using curl (follows redirects)
+          curl.exe -L -X POST -d "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" `
+            "https://scan.coverity.com/download/win64" -o coverity_tool.zip
+
+          # Check if the ZIP is valid / not empty
+          if ((Get-Item coverity_tool.zip).Length -eq 0) {
+              Write-Error "Coverity download failed (empty file or wrong credentials)"
+              exit 1
+          }
+
+          # Extract Coverity tool
           New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
           Expand-Archive coverity_tool.zip -DestinationPath coverity_tool -Force
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
           Write-Output "Coverity Tool installed successfully"
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
           Get-ChildItem -Recurse coverity_tool
+
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
@@ -46,6 +60,7 @@ jobs:
           update: true
           install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
           path-type: inherit
+
       - name: Build with Coverity
         shell: msys2 {0}
         run: |
@@ -60,11 +75,13 @@ jobs:
           SHA=$(git rev-parse --short HEAD)
           sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
           "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1"
-      - name: Compress with bzip2
+
+      - name: Compress results
         shell: powershell
         run: |
           Compress-Archive -Path cov-int -DestinationPath myproject.zip
         id: compress
+
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
