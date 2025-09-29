@@ -1808,7 +1808,7 @@ std::string getProfile(RESPONSE_CALLBACK_ARGS)
         int processed_value = processArithmeticOperation(sanitized_value);
         
         // SINK CWE 191
-        int multiplication_result = 500 * - processed_value;
+        int multiplication_result = processed_value - 500;
         std::cout << std::string("Complex multiplication result: ") + std::to_string(multiplication_result) << std::endl;
     }
     
