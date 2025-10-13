@@ -61,19 +61,26 @@ jobs:
       - name: Build with Coverity
         shell: msys2 {0}
         run: |
+          set -e
           covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
           if [ -z "$covFolder" ]; then
             echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
             exit 1
           fi
-
           covPath="$covFolder/bin/cov-build.exe"
           echo "Using Coverity at: $covPath"
-
-          SHA=$(git rev-parse --short HEAD)
-          sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
-
+          rm -rf cov-int
+          mkdir cov-int
           "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1"
+          if [ ! -f cov-int/build-log.txt ]; then
+            echo "Error: cov-int/build-log.txt not found!"
+            exit 1
+          fi
+          if [ ! -f cov-int/output/cli-diagnostics.json ]; then
+            echo "Error: cov-int/output/cli-diagnostics.json not found!"
+            exit 1
+          fi
+
 
       - name: Compress Results
         shell: powershell
