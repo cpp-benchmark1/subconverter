@@ -50,26 +50,20 @@ jobs:
           install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
           path-type: inherit
 
-      - name: Build with Coverity
-        shell: msys2 {0}
+      - name: Download and Install Coverity Tool
+        shell: powershell
         run: |
-          covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
-          if [ -z "$covFolder" ]; then
-            echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
-            exit 1
-          fi
-          covPath="$covFolder/bin/cov-build.exe"
-          SHA=$(git rev-parse --short HEAD)
-          sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
-          "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1"
-          if [ ! -f cov-int/build-log.txt ]; then
-            echo "Error: cov-int/build-log.txt not found!"
-            exit 1
-          fi
-          if [ ! -f cov-int/output/cli-diagnostics.json ]; then
-            echo "Error: cov-int/output/cli-diagnostics.json not found!"
-            exit 1
-          fi
+          $zipPath = "coverity_tool.zip"
+          $body = @{
+              token = "${{ secrets.COVERITY_TOKEN }}"
+              project = "${{ github.repository }}"
+          }
+          Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" -Method Post -Body $body -OutFile $zipPath
+          New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
+          Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
+          $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
+          New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
+
 
       - name: Compress Results
         shell: powershell
