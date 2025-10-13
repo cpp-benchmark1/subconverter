@@ -36,19 +36,11 @@ jobs:
         shell: powershell
         run: |
           $zipPath = "coverity_tool.zip"
-          Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" `
-            -Method Post `
-            -Body "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" `
-            -OutFile $zipPath
+          curl -L -X POST "https://scan.coverity.com/download/win64" -d "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" -o $zipPath
           New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
           Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
-
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
-
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
-
-          Write-Output "Coverity Tool installed successfully"
-          Get-ChildItem -Recurse coverity_tool
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -61,16 +53,14 @@ jobs:
       - name: Build with Coverity
         shell: msys2 {0}
         run: |
-          set -e
           covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
           if [ -z "$covFolder" ]; then
             echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
             exit 1
           fi
           covPath="$covFolder/bin/cov-build.exe"
-          echo "Using Coverity at: $covPath"
-          rm -rf cov-int
-          mkdir cov-int
+          SHA=$(git rev-parse --short HEAD)
+          sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
           "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1"
           if [ ! -f cov-int/build-log.txt ]; then
             echo "Error: cov-int/build-log.txt not found!"
@@ -80,7 +70,6 @@ jobs:
             echo "Error: cov-int/output/cli-diagnostics.json not found!"
             exit 1
           fi
-
 
       - name: Compress Results
         shell: powershell
