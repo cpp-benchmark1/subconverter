@@ -5,6 +5,11 @@ on:
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      languages:
+        description: "Languages to analyze"
+        required: true
+        default: "c-cpp"
 
 jobs:
   coverity:
@@ -21,6 +26,23 @@ jobs:
         with:
           submodules: 'recursive'
 
+      - name: Download and Install Coverity Tool
+        shell: powershell
+        run: |
+          $zipPath = "coverity_tool.zip"
+          Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" `
+            -Method Post `
+            -Body "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" `
+            -OutFile $zipPath
+
+          New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
+          Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
+
+          $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
+
+          New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
+          Write-Output "Coverity Tool installed successfully"
+
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
@@ -29,42 +51,34 @@ jobs:
           install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
           path-type: inherit
 
-      - name: Download Coverity Tool
-        shell: bash
-        run: |
-          curl -X POST "https://scan.coverity.com/download/linux64" \
-            -d "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" \
-            -o coverity_tool.tgz
-          mkdir -p coverity_tool
-          tar -xvzf coverity_tool.tgz -C coverity_tool --strip-components=1
-          export PATH="$PWD/coverity_tool/bin:$PATH"
-          echo "Coverity Tool installed"
-
       - name: Build with Coverity
         shell: msys2 {0}
         run: |
-          COV_DIR="$(pwd)/cov-int"
-          rm -rf "$COV_DIR"
-          mkdir -p "$COV_DIR"
+          covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
+          if [ -z "$covFolder" ]; then
+            echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
+            exit 1
+          fi
 
-          covFolder=$(find coverity_tool -type d -name 'cov-analysis*' | head -n1)
-          covPath="$covFolder/bin/cov-build"
+          covPath="$covFolder/bin/cov-build.exe"
           echo "Using Coverity at: $covPath"
 
-          "$covPath" --dir "$COV_DIR" bash scripts/build.windows.release.sh
+          rm -rf cov-int
+          mkdir cov-int
 
-          if [ ! -f "$COV_DIR/build-log.txt" ]; then
-            echo "Error: build-log.txt not found in cov-int!"
+          "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1"
+
+          if [ ! -f cov-int/build-log.txt ]; then
+            echo "Error: cov-int/build-log.txt not found!"
             exit 1
           fi
-          if [ ! -f "$COV_DIR/output/cli-diagnostics.json" ]; then
-            echo "Error: cli-diagnostics.json not found in cov-int/output!"
+          if [ ! -f cov-int/output/cli-diagnostics.json ]; then
+            echo "Error: cov-int/output/cli-diagnostics.json not found!"
             exit 1
           fi
-          echo "Coverity capture completed successfully"
 
       - name: Compress Results
-        shell: msys2 {0}
+        shell: bash
         run: |
           tar cjvf myproject.tar.bz2 cov-int
 
@@ -91,12 +105,13 @@ jobs:
           asset_content_type: application/x-bzip2
 
       - name: Notify Coverity Scan
-        shell: bash
+        shell: powershell
         run: |
-          curl -X POST "https://scan.coverity.com/builds" \
-            -d "project=${{ github.repository }}" \
-            -d "token=${{ secrets.COVERITY_TOKEN }}" \
-            -d "email=cpp.benchmark@proton.me" \
-            -d "url=https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.tar.bz2" \
-            -d "version=1.0" \
-            -d "description=Automated Coverity Scan"
+          Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
+            project     = "${{ github.repository }}"
+            token       = "${{ secrets.COVERITY_TOKEN }}"
+            email       = "cpp.benchmark@proton.me"
+            url         = "https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.tar.bz2"
+            version     = "1.0"
+            description = "Automated Coverity Scan"
+          }
