@@ -19,6 +19,12 @@ jobs:
       packages: read
       actions: read
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - language: c-cpp
+          build-mode: manual
 
     steps:
       - name: Checkout repository
@@ -34,14 +40,15 @@ jobs:
             -Method Post `
             -Body "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" `
             -OutFile $zipPath
-
           New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
           Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
 
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
 
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
+
           Write-Output "Coverity Tool installed successfully"
+          Get-ChildItem -Recurse coverity_tool
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -63,24 +70,16 @@ jobs:
           covPath="$covFolder/bin/cov-build.exe"
           echo "Using Coverity at: $covPath"
 
-          rm -rf cov-int
-          mkdir cov-int
+          SHA=$(git rev-parse --short HEAD)
+          sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
 
           "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1"
 
-          if [ ! -f cov-int/build-log.txt ]; then
-            echo "Error: cov-int/build-log.txt not found!"
-            exit 1
-          fi
-          if [ ! -f cov-int/output/cli-diagnostics.json ]; then
-            echo "Error: cov-int/output/cli-diagnostics.json not found!"
-            exit 1
-          fi
-
       - name: Compress Results
-        shell: bash
+        shell: powershell
         run: |
-          tar cjvf myproject.tar.bz2 cov-int
+          Compress-Archive -Path cov-int -DestinationPath myproject.zip
+        id: compress
 
       - name: Create GitHub Release
         id: create_release
@@ -100,8 +99,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: myproject.tar.bz2
-          asset_name: myproject.tar.bz2
+          asset_path: myproject.zip
+          asset_name: myproject.zip
           asset_content_type: application/x-bzip2
 
       - name: Notify Coverity Scan
@@ -111,7 +110,7 @@ jobs:
             project     = "${{ github.repository }}"
             token       = "${{ secrets.COVERITY_TOKEN }}"
             email       = "cpp.benchmark@proton.me"
-            url         = "https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.tar.bz2"
+            url         = "https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.zip"
             version     = "1.0"
             description = "Automated Coverity Scan"
           }
