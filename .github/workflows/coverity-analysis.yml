@@ -73,7 +73,24 @@ jobs:
           SHA=$(git rev-parse --short HEAD)
           sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
 
-          "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1"
+          echo "Listing structure under coverity_tool:"
+          find coverity_tool -type d -maxdepth 3
+
+          echo "Listing structure under current directory:"
+          ls -R | head -n 200
+
+          "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
+
+      - name: Verify Coverity output
+        shell: pwsh
+        run: |
+          if (Test-Path "cov-int/build-log.txt") {
+            Write-Host "✅ Coverity build-log.txt found"
+          } else {
+            Write-Host "❌ Coverity build-log.txt missing"
+            Get-ChildItem -Path cov-int -Recurse | Out-String | Write-Host
+            exit 1
+          }
 
       - name: Compress Results
         shell: powershell
