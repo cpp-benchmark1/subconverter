@@ -84,13 +84,16 @@ jobs:
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
+          echo "Checking cov-int directory location..."
+          find . -type d -name "cov-int" || true
+
           if [ -f "cov-int/build-log.txt" ]; then
             echo "✅ build-log.txt found"
           elif [ -f "cov-int/output/cli-diagnostics.json" ]; then
             echo "✅ cli-diagnostics.json found"
           else
             echo "❌ No Coverity output found!"
-            echo "Listing cov-int contents:"
+            echo "Listing cov-int contents recursively:"
             ls -R cov-int || true
             exit 1
           fi
@@ -98,7 +101,18 @@ jobs:
       - name: Compress Results
         shell: powershell
         run: |
-          Compress-Archive -Path cov-int -DestinationPath myproject.zip
+          Set-Location $env:GITHUB_WORKSPACE
+          if (Test-Path "subconverter/cov-int") {
+            Write-Output "Found cov-int inside subconverter/, adjusting path"
+            Compress-Archive -Path "subconverter/cov-int" -DestinationPath "myproject.zip" -Force
+          } elseif (Test-Path "cov-int") {
+            Write-Output "Found cov-int at workspace root"
+            Compress-Archive -Path "cov-int" -DestinationPath "myproject.zip" -Force
+          } else {
+            Write-Output "❌ cov-int directory not found!"
+            Get-ChildItem -Recurse | Out-String | Write-Host
+            exit 1
+          }
         id: compress
 
       - name: Create GitHub Release
@@ -126,6 +140,7 @@ jobs:
       - name: Notify Coverity Scan
         shell: powershell
         run: |
+          Write-Output "Sending to Coverity Scan portal..."
           Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
             project     = "${{ github.repository }}"
             token       = "${{ secrets.COVERITY_TOKEN }}"
