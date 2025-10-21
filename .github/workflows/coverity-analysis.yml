@@ -29,7 +29,6 @@ jobs:
           libyaml-cpp-dev \
           libpcre2-dev \
           libxml2-dev \
-          libdate-dev
           zlib1g-dev
 
     - name: Install toml11
