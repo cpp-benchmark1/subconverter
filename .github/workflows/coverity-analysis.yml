@@ -70,20 +70,24 @@ jobs:
           covPath="$covFolder/bin/cov-build.exe"
           echo "Using Coverity at: $covPath"
 
-          # Fail fast on any error
-          set -eo pipefail
+          set +e
 
           SHA=$(git rev-parse --short HEAD)
           sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
 
-          # Clean previous build
           rm -rf cov-int
           mkdir -p cov-int
 
-          # Run Coverity build (command follows options) - use -- to terminate cov-build options
           "$covPath" --dir cov-int --verbose -- bash -lc "scripts/build.windows.release.sh VERBOSE=1"
+          build_status=$?
 
-          # Verify build log was created
+          if [ $build_status -ne 0 ]; then
+            echo "⚠️ Build completed with errors (status $build_status), continuing for Coverity analysis."
+          else
+            echo "✅ Build completed successfully."
+          fi
+
+          # Check if build-log.txt was created
           if [ -f "cov-int/build-log.txt" ]; then
             echo "Build log created successfully"
             ls -la cov-int/
@@ -92,6 +96,7 @@ jobs:
             ls -la cov-int/
             exit 1
           fi
+
 
       - name: Compress Results
         shell: powershell
