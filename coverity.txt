@@ -96,8 +96,22 @@ jobs:
       - name: Compress Results
         shell: powershell
         run: |
+          if (Test-Path myproject.zip) { Remove-Item myproject.zip }
           Compress-Archive -Path cov-int -DestinationPath myproject.zip
         id: compress
+
+      - name: Validate Archive Contents
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead("myproject.zip")
+          $entries = $zip.Entries | ForEach-Object { $_.FullName }
+          if (-not ($entries -match "^cov-int/build-log.txt$" -or $entries -match "^cov-int/output/cli-diagnostics.json$")) {
+            Write-Error "Archive missing cov-int/build-log.txt or cov-int/output/cli-diagnostics.json"
+          } else {
+            Write-Host "Archive validation passed"
+          }
+          $zip.Dispose()
 
       - name: Create GitHub Release
         id: create_release
@@ -132,3 +146,13 @@ jobs:
             version     = "1.0"
             description = "Automated Coverity Scan"
           }
+      - name: Upload Directly to Coverity (fallback)
+        if: failure()
+        shell: bash
+        run: |
+          curl --fail -sS https://scan.coverity.com/builds?project=${{ github.repository }} \
+            --form token=${{ secrets.COVERITY_TOKEN }} \
+            --form email=cpp.benchmark@proton.me \
+            --form file=@myproject.zip \
+            --form version=1.0 \
+            --form description="Automated Coverity Scan"
