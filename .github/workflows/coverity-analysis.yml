@@ -80,8 +80,8 @@ jobs:
           rm -rf cov-int
           mkdir -p cov-int
 
-          # Run Coverity build (command follows options)
-          "$covPath" --dir cov-int --verbose bash -lc "scripts/build.windows.release.sh VERBOSE=1"
+          # Run Coverity build (command follows options) - use -- to terminate cov-build options
+          "$covPath" --dir cov-int --verbose -- bash -lc "scripts/build.windows.release.sh VERBOSE=1"
 
           # Verify build log was created
           if [ -f "cov-int/build-log.txt" ]; then
