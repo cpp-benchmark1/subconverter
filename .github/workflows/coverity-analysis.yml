@@ -1,160 +1,114 @@
 name: Coverity Scan
+
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 0 * * 0'
   workflow_dispatch:
-    inputs:
-      languages:
-        description: "Languages to analyze"
-        required: true
-        default: "c-cpp"
 
 jobs:
   coverity:
-    runs-on: windows-latest
-    permissions:
-      security-events: write
-      packages: read
-      actions: read
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - language: c-cpp
-          build-mode: manual
-
+    runs-on: ubuntu-22.04
+    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Download and Install Coverity Tool
-        shell: powershell
-        run: |
-          $zipPath = "coverity_tool.zip"
-          Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" `
-            -Method Post `
-            -Body "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" `
-            -OutFile $zipPath
-          New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
-          Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libcurl4-openssl-dev \
+          rapidjson-dev \
+          libyaml-cpp-dev \
+          libpcre2-dev \
+          libxml2-dev \
+          zlib1g-dev
 
-          $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
+    - name: Install toml11
+      run: |
+        git clone https://github.com/ToruNiina/toml11.git
+        cd toml11
+        mkdir build && cd build
+        cmake ..
+        sudo make install
 
-          New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
+    - name: Install QuickJS
+      run: |
+        git clone https://github.com/bellard/quickjs.git
+        cd quickjs
+        make
+        sudo make install
+        sudo ldconfig
 
-          Write-Output "Coverity Tool installed successfully"
-          Get-ChildItem -Recurse coverity_tool
+    - name: Install libcron
+      run: |
+        git clone https://github.com/PerMalmberg/libcron.git
+        cd libcron
+        mkdir build && cd build
+        cmake ..
+        make
+        sudo make install
 
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
-          path-type: inherit
+    - name: Download Coverity Build Tool
+      run: |
+        wget -q https://scan.coverity.com/download/linux64 \
+          --post-data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=${{ secrets.COVERITY_SCAN_PROJECT_NAME }}" \
+          -O coverity_tool.tgz
+        mkdir cov-analysis-linux64
+        tar xzf coverity_tool.tgz --strip 1 -C cov-analysis-linux64
 
-      - name: Build with Coverity
-        shell: msys2 {0}
-        run: |
-          covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
-          if [ -z "$covFolder" ]; then
-            echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
-            exit 1
-          fi
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake -DCMAKE_BUILD_TYPE=Release ..
 
-          covPath="$covFolder/bin/cov-build.exe"
-          echo "Using Coverity at: $covPath"
+    - name: Build with Coverity
+      run: |
+        export PATH=`pwd`/cov-analysis-linux64/bin:$PATH
+        cd build
+        rm -rf cov-int
+        mkdir -p cov-int
 
-          set +e
+        # Run build with cov-build allowing some failures
+        cov-build --dir cov-int --allow-missing-targets make -j$(nproc) 2>&1 | tee build-log.txt
+        build_status=${PIPESTATUS[0]}
+        if [ $build_status -ne 0 ]; then
+          echo "Build completed with errors, continuing with Coverity analysis."
+        else
+          echo "Build completed successfully."
+        fi
 
-          SHA=$(git rev-parse --short HEAD)
-          sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
+        # Calculate approximate build completion percentage
+        total_targets=$(grep -c "Building CXX object" build-log.txt || echo 0)
+        succeeded_targets=$(grep -c "Built target" build-log.txt || echo 0)
+        if [ $total_targets -gt 0 ]; then
+          pct=$(( succeeded_targets * 100 / total_targets ))
+          echo "Build completion: $pct% ($succeeded_targets/$total_targets targets)"
+        fi
 
-          rm -rf cov-int
-          mkdir -p cov-int
+    - name: Submit to Coverity Scan
+      run: |
+        cd build
+        tar czvf subconverter.tgz cov-int
+        curl --form token=${{ secrets.COVERITY_SCAN_TOKEN }} \
+          --form email=${{ secrets.COVERITY_SCAN_EMAIL }} \
+          --form file=@subconverter.tgz \
+          --form version="${GITHUB_SHA}" \
+          --form description="Automated Coverity Scan build" \
+          https://scan.coverity.com/builds?project=${{ secrets.COVERITY_SCAN_PROJECT_NAME }}
 
-          "$covPath" --dir cov-int --verbose -- bash -lc "scripts/build.windows.release.sh VERBOSE=1"
-          build_status=$?
-
-          if [ $build_status -ne 0 ]; then
-            echo "⚠️ Build completed with errors (status $build_status), continuing for Coverity analysis."
-          else
-            echo "✅ Build completed successfully."
-          fi
-
-          # Check if build-log.txt was created
-          if [ -f "cov-int/build-log.txt" ]; then
-            echo "Build log created successfully"
-            ls -la cov-int/
-          else
-            echo "ERROR: Build log not found"
-            ls -la cov-int/
-            exit 1
-          fi
-
-
-      - name: Compress Results
-        shell: powershell
-        run: |
-          if (Test-Path myproject.zip) { Remove-Item myproject.zip }
-          Compress-Archive -Path cov-int -DestinationPath myproject.zip
-        id: compress
-
-      - name: Validate Archive Contents
-        shell: powershell
-        run: |
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = [System.IO.Compression.ZipFile]::OpenRead("myproject.zip")
-          $entries = $zip.Entries | ForEach-Object { $_.FullName }
-          if (-not ($entries -match "^cov-int/build-log.txt$" -or $entries -match "^cov-int/output/cli-diagnostics.json$")) {
-            Write-Error "Archive missing cov-int/build-log.txt or cov-int/output/cli-diagnostics.json"
-          } else {
-            Write-Host "Archive validation passed"
-          }
-          $zip.Dispose()
-
-      - name: Upload to Coverity
-        if: success()
-        shell: powershell
-        env:
-          COVERITY_TOKEN: ${{ secrets.COVERITY_TOKEN }}
-        run: |
-          if (-not (Test-Path myproject.zip)) { throw "myproject.zip missing" }
-          if (-not (Test-Path cov-int/build-log.txt)) { throw "cov-int/build-log.txt missing" }
-          $zipPath = (Resolve-Path -LiteralPath myproject.zip).Path
-          Write-Host "Uploading $zipPath to Coverity..."
-          curl.exe --fail -sS "https://scan.coverity.com/builds?project=$env:GITHUB_REPOSITORY" `
-            -F "token=$env:COVERITY_TOKEN" `
-            -F "email=cpp.benchmark@proton.me" `
-            -F "file=@$zipPath" `
-            -F "version=$env:GITHUB_SHA" `
-            -F "description=Automated Coverity Scan via GitHub Actions"
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: "coverity-scan-${{ github.run_id }}"
-          release_name: "Coverity Scan Results"
-          body: "Automated Coverity Scan Results"
-          draft: false
-          prerelease: false
-
-      - name: Upload Asset to Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: myproject.zip
-          asset_name: myproject.zip
-          asset_content_type: application/zip
-
-      # Optional: keep GitHub Release for artifacts, not required by Coverity when uploading file directly
+    - name: Upload Coverity Results (artifact)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverity-results
+        path: build/cov-int/
+        retention-days: 7
