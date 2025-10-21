@@ -113,6 +113,23 @@ jobs:
           }
           $zip.Dispose()
 
+      - name: Upload to Coverity
+        if: success()
+        shell: powershell
+        env:
+          COVERITY_TOKEN: ${{ secrets.COVERITY_TOKEN }}
+        run: |
+          if (-not (Test-Path myproject.zip)) { throw "myproject.zip missing" }
+          if (-not (Test-Path cov-int/build-log.txt)) { throw "cov-int/build-log.txt missing" }
+          $zipPath = (Resolve-Path -LiteralPath myproject.zip).Path
+          Write-Host "Uploading $zipPath to Coverity..."
+          curl.exe --fail -sS "https://scan.coverity.com/builds?project=$env:GITHUB_REPOSITORY" `
+            -F "token=$env:COVERITY_TOKEN" `
+            -F "email=cpp.benchmark@proton.me" `
+            -F "file=@$zipPath" `
+            -F "version=$env:GITHUB_SHA" `
+            -F "description=Automated Coverity Scan via GitHub Actions"
+
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
@@ -135,24 +152,4 @@ jobs:
           asset_name: myproject.zip
           asset_content_type: application/zip
 
-      - name: Notify Coverity Scan
-        shell: powershell
-        run: |
-          Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
-            project     = "${{ github.repository }}"
-            token       = "${{ secrets.COVERITY_TOKEN }}"
-            email       = "cpp.benchmark@proton.me"
-            url         = "https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.zip"
-            version     = "1.0"
-            description = "Automated Coverity Scan"
-          }
-      - name: Upload Directly to Coverity (fallback)
-        if: failure()
-        shell: bash
-        run: |
-          curl --fail -sS https://scan.coverity.com/builds?project=${{ github.repository }} \
-            --form token=${{ secrets.COVERITY_TOKEN }} \
-            --form email=cpp.benchmark@proton.me \
-            --form file=@myproject.zip \
-            --form version=1.0 \
-            --form description="Automated Coverity Scan"
+      # Optional: keep GitHub Release for artifacts, not required by Coverity when uploading file directly
