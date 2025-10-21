@@ -60,7 +60,7 @@ jobs:
     - name: Download Coverity Build Tool
       run: |
         wget -q https://scan.coverity.com/download/linux64 \
-          --post-data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=${{ secrets.COVERITY_SCAN_PROJECT_NAME }}" \
+          --post-data "token=${{ secrets.COVERITY_TOKEN }}&project=${{ secrets.COVERITY_SCAN_PROJECT_NAME }}" \
           -O coverity_tool.tgz
         mkdir cov-analysis-linux64
         tar xzf coverity_tool.tgz --strip 1 -C cov-analysis-linux64
@@ -99,7 +99,7 @@ jobs:
       run: |
         cd build
         tar czvf subconverter.tgz cov-int
-        curl --form token=${{ secrets.COVERITY_SCAN_TOKEN }} \
+        curl --form token=${{ secrets.COVERITY_TOKEN }} \
           --form email=${{ secrets.COVERITY_SCAN_EMAIL }} \
           --form file=@subconverter.tgz \
           --form version="${GITHUB_SHA}" \
