@@ -29,6 +29,7 @@ jobs:
           libyaml-cpp-dev \
           libpcre2-dev \
           libxml2-dev \
+          libdate-dev
           zlib1g-dev
 
     - name: Install toml11
@@ -53,8 +54,9 @@ jobs:
         cd libcron
         mkdir build && cd build
         cmake ..
-        make
-        sudo make install
+        make -j$(nproc) || true
+        sudo make install || true
+
 
     - name: Download Coverity Build Tool
       run: |
