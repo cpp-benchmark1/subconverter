@@ -29,6 +29,7 @@ jobs:
           libyaml-cpp-dev \
           libpcre2-dev \
           libxml2-dev \
+          libyaml-dev \
           zlib1g-dev
 
     - name: Install toml11
@@ -47,19 +48,10 @@ jobs:
         sudo make install
         sudo ldconfig
 
-    - name: Install libcron
-      run: |
-        git clone https://github.com/PerMalmberg/libcron.git
-        cd libcron
-        mkdir build && cd build
-        cmake ..
-        make -j$(nproc) || true
-        sudo make install || true
-
     - name: Download Coverity Build Tool
       run: |
         wget -q https://scan.coverity.com/download/linux64 \
-          --post-data "token=${{ secrets.COVERITY_TOKEN }}&project=${{ secrets.COVERITY_SCAN_PROJECT_NAME }}" \
+          --post-data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=${{ secrets.COVERITY_SCAN_PROJECT_NAME }}" \
           -O coverity_tool.tgz
         mkdir cov-analysis-linux64
         tar xzf coverity_tool.tgz --strip 1 -C cov-analysis-linux64
@@ -68,10 +60,9 @@ jobs:
       run: |
         mkdir -p build
         cd build
+        # Allow LibCron to be optional in your CMakeLists.txt
         cmake -DCMAKE_BUILD_TYPE=Release \
-              -DLIBCRON_INCLUDE_DIRS=/usr/local/include \
-              -DLIBCRON_LIBRARY=/usr/local/lib/libcron.a \
-              -DCMAKE_PREFIX_PATH=/usr/local \
+              -DFIND_LIBCRON_OPTIONAL=ON \
               ..
 
     - name: Build with Coverity
@@ -81,7 +72,7 @@ jobs:
         rm -rf cov-int
         mkdir -p cov-int
 
-        # Run build with cov-build allowing some failures
+        # Run build with cov-build allowing errors
         cov-build --dir cov-int --allow-missing-targets make -j$(nproc) 2>&1 | tee build-log.txt
         build_status=${PIPESTATUS[0]}
         if [ $build_status -ne 0 ]; then
@@ -102,7 +93,7 @@ jobs:
       run: |
         cd build
         tar czvf subconverter.tgz cov-int
-        curl --form token=${{ secrets.COVERITY_TOKEN }} \
+        curl --form token=${{ secrets.COVERITY_SCAN_TOKEN }} \
           --form email=${{ secrets.COVERITY_SCAN_EMAIL }} \
           --form file=@subconverter.tgz \
           --form version="${GITHUB_SHA}" \
