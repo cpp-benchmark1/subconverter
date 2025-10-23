@@ -56,7 +56,6 @@ jobs:
         make -j$(nproc) || true
         sudo make install || true
 
-
     - name: Download Coverity Build Tool
       run: |
         wget -q https://scan.coverity.com/download/linux64 \
@@ -69,7 +68,11 @@ jobs:
       run: |
         mkdir -p build
         cd build
-        cmake -DCMAKE_BUILD_TYPE=Release ..
+        cmake -DCMAKE_BUILD_TYPE=Release \
+              -DLIBCRON_INCLUDE_DIRS=/usr/local/include \
+              -DLIBCRON_LIBRARY=/usr/local/lib/libcron.a \
+              -DCMAKE_PREFIX_PATH=/usr/local \
+              ..
 
     - name: Build with Coverity
       run: |
