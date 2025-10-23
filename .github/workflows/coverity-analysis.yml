@@ -1,34 +1,21 @@
-name: Coverity Scan Build
+name: Coverity Scan
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  coverity:
     runs-on: ubuntu-latest
-
     steps:
-      # Checkout the source code
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Install all system dependencies required by your CMakeLists.txt
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            git \
-            pkg-config \
-            libcurl4-openssl-dev \
-            libpcre2-dev \
-            libyaml-cpp-dev \
-            libxml2-dev \
-            liblzma-dev \
-            bzip2
+          sudo apt-get install -y build-essential cmake git pkg-config \
+          libcurl4-openssl-dev libpcre2-dev libyaml-cpp-dev libxml2-dev \
+          liblzma-dev bzip2
 
-      # Install LibCron (required by your project)
       - name: Install LibCron
         run: |
           git clone https://github.com/PerMalmberg/libcron.git
@@ -39,44 +26,31 @@ jobs:
           sudo make install
           cd ../..
 
-      # Download and extract Coverity tools
-      - name: Download Coverity Build Tool
+      - name: Download Coverity
         run: |
           wget https://scan.coverity.com/download/linux64 \
             --post-data "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" \
             -O coverity_tool.tgz
           mkdir cov-analysis
           tar xzf coverity_tool.tgz --strip-components=1 -C cov-analysis
-          echo "Coverity tool extracted to $(pwd)/cov-analysis"
+          export PATH=$PWD/cov-analysis/bin:$PATH
 
-      # Configure the CMake project (create build directory properly)
-      - name: Configure project with CMake
+      - name: Configure and Capture Build
         run: |
           mkdir -p build
           cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          cd ..
-
-      # Build project with Coverity wrapper
-      - name: Build with Coverity
-        run: |
-          export PATH="$(pwd)/cov-analysis/bin:$PATH"
-          mkdir -p cov-int
-          cd build
+          cov-build --dir ../cov-int cmake .. -DCMAKE_BUILD_TYPE=Release
           cov-build --dir ../cov-int make -j$(nproc)
           cd ..
 
-      # Package results into a tarball
-      - name: Package Coverity results
+      - name: Analyze
         run: |
-          tar czf coverity-results.tgz cov-int
+          cov-analyze --dir cov-int
 
-      # Upload analysis to Coverity
-      - name: Upload to Coverity Scan
+      - name: Submit to Coverity
         run: |
-          curl --form token=${{ secrets.COVERITY_TOKEN }} \
-               --form email=${{ secrets.COVERITY_SCAN_EMAIL }} \
-               --form file=@coverity-results.tgz \
-               --form version="${{ github.sha }}" \
-               --form description="Automated Coverity Scan via GitHub Actions" \
-               https://scan.coverity.com/builds?project=${{ github.repository }}
+          cov-commit-defects \
+            --dir cov-int \
+            --url https://scan.coverity.com \
+            --stream ${{ github.repository }} \
+            --user ${{ secrets.COVERITY_TOKEN }}
