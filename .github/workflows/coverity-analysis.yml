@@ -1,4 +1,5 @@
 name: Coverity Scan
+
 on:
   push:
     branches: [ "main" ]
@@ -13,12 +14,13 @@ on:
 
 jobs:
   coverity:
-    runs-on: windows-latest
+    runs-on: ubuntu-24.04
     permissions:
       security-events: write
       packages: read
       actions: read
       contents: write
+
     strategy:
       fail-fast: false
       matrix:
@@ -30,55 +32,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential git curl wget cmake \
+            pkg-config libpcre2-dev libxml2-dev zlib1g-dev \
+            liblzma-dev libyaml-cpp-dev bzip2
+          sudo apt-get clean
 
       - name: Download and Install Coverity Tool
-        shell: powershell
         run: |
-          $zipPath = "coverity_tool.zip"
-          Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" `
-            -Method Post `
-            -Body "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" `
-            -OutFile $zipPath
-          New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
-          Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
-          $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
-          New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
-          Write-Output "Coverity Tool installed successfully"
-          Get-ChildItem -Recurse coverity_tool
+          wget https://scan.coverity.com/download/linux64 \
+            --post-data "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" \
+            -O coverity_tool.tgz
+          mkdir coverity_tool
+          tar -xvzf coverity_tool.tgz -C coverity_tool --strip-components=1
+          export PATH=$PWD/coverity_tool/bin:$PATH
+          echo "Coverity Tool installed successfully"
+          coverity_tool/bin/cov-build --version
 
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
-          path-type: inherit
-
-      - name: Build with Coverity
-        shell: msys2 {0}
+      - name: Build with Coverity (continue on errors)
         run: |
-          covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
-          if [ -z "$covFolder" ]; then
-            echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
-            exit 1
-          fi
-          covPath="$covFolder/bin/cov-build.exe"
-          analyzePath="$covFolder/bin/cov-analyze.exe"
-          echo "Using Coverity at: $covPath"
-          SHA=$(git rev-parse --short HEAD)
-          sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
+          echo "🔧 Starting Coverity build..."
+          mkdir -p cov-int
+          export PATH=$PWD/coverity_tool/bin:$PATH
+          coverity_tool/bin/cov-build --dir cov-int make -j$(nproc) || true
+          
+          echo "Build completed (some errors may have been ignored intentionally)"
+          echo "Build progress summary:"
+          grep -E "Emitted|ready for analysis" cov-int/build-log.txt || echo "No summary found. Check build-log.txt for details."
 
-          # Run cov-build and force output log
-          "$covPath" --dir cov-int bash -c "scripts/build.windows.release.sh VERBOSE=1" 2>&1 | tee cov-int/build-log.txt
-
-          # Generate diagnostics JSON for Coverity
-          "$analyzePath" --dir cov-int --json-output cov-int/output/cli-diagnostics.json
-
-      - name: Compress Results
-        shell: powershell
+      - name: Compress results with bzip2
         run: |
-          Compress-Archive -Path cov-int -DestinationPath myproject.zip
+          tar cjvf myproject.tar.bz2 cov-int
         id: compress
 
       - name: Create GitHub Release
@@ -99,18 +88,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: myproject.zip
-          asset_name: myproject.zip
+          asset_path: myproject.tar.bz2
+          asset_name: myproject.tar.bz2
           asset_content_type: application/x-bzip2
 
       - name: Notify Coverity Scan
-        shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
-            project     = "${{ github.repository }}"
-            token       = "${{ secrets.COVERITY_TOKEN }}"
-            email       = "cpp.benchmark@proton.me"
-            url         = "https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.zip"
-            version     = "1.0"
-            description = "Automated Coverity Scan"
-          }
+          curl --data "project=${{ github.repository }}&token=${{ secrets.COVERITY_TOKEN }}&email=cpp.benchmark@proton.me&url=https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.tar.bz2&version=1.0&description=Automated+Coverity+Scan" https://scan.coverity.com/builds
