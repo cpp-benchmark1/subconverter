@@ -36,16 +36,39 @@ jobs:
         shell: powershell
         run: |
           $zipPath = "coverity_tool.zip"
-          Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" `
-            -Method Post `
-            -Body "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" `
-            -OutFile $zipPath
+          $form = @{
+            token = "${{ secrets.COVERITY_TOKEN }}"
+            project = "${{ github.repository }}"
+          }
+          $headers = @{
+            "User-Agent" = "GitHubActions-Coverity"
+          }
+
+          Write-Output "⬇️ Downloading Coverity tool..."
+          try {
+            Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" `
+              -Method Post `
+              -Headers $headers `
+              -ContentType "application/x-www-form-urlencoded" `
+              -Body $form `
+              -OutFile $zipPath -UseBasicParsing
+          } catch {
+            Write-Error "❌ Failed to download Coverity tool: $($_.Exception.Message)"
+            exit 1
+          }
+
+          if (-not (Test-Path $zipPath)) {
+            Write-Error "❌ Coverity zip not found after download!"
+            exit 1
+          }
+
           New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
           Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
-          Write-Output "Coverity Tool installed successfully"
+          Write-Output "✅ Coverity Tool installed successfully"
           Get-ChildItem -Recurse coverity_tool
+
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
@@ -71,23 +94,6 @@ jobs:
           echo "Listing top-level directories:"
           ls -1 || true
           "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
-
-      - name: Fix Coverity output path
-        shell: powershell
-        run: |
-          if (-Not (Test-Path "cov-int")) {
-              New-Item -ItemType Directory -Path "cov-int" | Out-Null
-          }
-
-          Copy-Item -Path "D:/a/subconverter/subconverter/cov-int/build-log.txt" `
-                    -Destination "$PWD\cov-int\build-log.txt" -Force
-
-          if (Test-Path "cov-int\build-log.txt") {
-              Write-Output "✅ build-log.txt copied successfully"
-          } else {
-              Write-Error "❌ Failed to copy build-log.txt"
-          }
-
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
