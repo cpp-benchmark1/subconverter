@@ -43,48 +43,52 @@ jobs:
             liblzma-dev libyaml-cpp-dev bzip2
           sudo apt-get clean
 
-      - name: Download and install Coverity Tool
+      - name: Download and Install Coverity Tool
         run: |
-          echo "⬇Downloading Coverity Tool..."
+          echo "Downloading Coverity Tool..."
           wget https://scan.coverity.com/download/linux64 \
             --post-data "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" \
             -O coverity_tool.tgz
           mkdir coverity_tool
           tar -xvzf coverity_tool.tgz -C coverity_tool --strip-components=1
           export PATH=$PWD/coverity_tool/bin:$PATH
-          echo "Coverity Tool successfully installed."
-          echo "Detected version:"
+          echo "Coverity Tool installed successfully"
+          echo "Coverity version:"
           coverity_tool/bin/cov-build --help | head -n 15
 
-      - name: Build with Coverity (error tolerant)
+      - name: Build with Coverity (CMake, error tolerant)
         run: |
           echo "Starting Coverity build..."
-          mkdir -p cov-int
+          mkdir -p build cov-int
           export PATH=$PWD/coverity_tool/bin:$PATH
+          cd build
 
-          # Run the Coverity build, allowing failures
-          coverity_tool/bin/cov-build --dir cov-int make -j$(nproc) || true
-          
-          echo "Build completed (even if some errors occurred)."
+          # Configure project with CMake
+          cmake ..
+
+          # Compile project wrapped by Coverity, allow errors
+          cov-build --dir ../cov-int make -j$(nproc) || true
+
+          echo "Build finished (even if errors occurred)"
           echo "Build summary:"
-          if [ -f cov-int/build-log.txt ]; then
-            grep -E "Emitted|ready for analysis" cov-int/build-log.txt || echo "No summary found."
+          if [ -f ../cov-int/build-log.txt ]; then
+            grep -E "Emitted|ready for analysis" ../cov-int/build-log.txt || echo "No summary found"
           else
-            echo "build-log.txt was not generated!"
+            echo "build-log.txt not found!"
           fi
 
-      - name: Verify build-log.txt and directory size
+      - name: Verify build-log.txt and size
         run: |
           if [ -f cov-int/build-log.txt ]; then
-            echo "build-log.txt found:"
+            echo "build-log.txt exists:"
             ls -lh cov-int/build-log.txt
           else
-            echo "build-log.txt not found. Submission will be rejected."
+            echo "build-log.txt not found. Submission will fail."
             exit 1
           fi
           du -sh cov-int || echo "Could not calculate cov-int size"
 
-      - name: Compress analysis results
+      - name: Compress results
         run: |
           tar cjvf myproject.tar.bz2 cov-int
         id: compress
@@ -101,7 +105,7 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload artifact to GitHub Release
+      - name: Upload artifact to release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
