@@ -1,120 +1,82 @@
-name: Coverity Scan
+name: Coverity Scan Build
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
-    inputs:
-      languages:
-        description: "Languages to analyze"
-        required: true
-        default: "c-cpp"
 
 jobs:
-  coverity:
-    runs-on: ubuntu-24.04
-    permissions:
-      security-events: write
-      packages: read
-      actions: read
-      contents: write
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - language: c-cpp
-          build-mode: manual
+  build:
+    runs-on: ubuntu-latest
 
     steps:
+      # Checkout the source code
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Install dependencies
+      # Install all system dependencies required by your CMakeLists.txt
+      - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential git curl wget cmake \
-            pkg-config libpcre2-dev libxml2-dev zlib1g-dev \
-            liblzma-dev libyaml-cpp-dev bzip2
-          sudo apt-get clean
+            build-essential \
+            cmake \
+            git \
+            pkg-config \
+            libcurl4-openssl-dev \
+            libpcre2-dev \
+            libyaml-cpp-dev \
+            libxml2-dev \
+            liblzma-dev \
+            bzip2
 
-      - name: Download and Install Coverity Tool
+      # Install LibCron (required by your project)
+      - name: Install LibCron
         run: |
-          echo "Downloading Coverity Tool..."
+          git clone https://github.com/PerMalmberg/libcron.git
+          cd libcron
+          mkdir build && cd build
+          cmake ..
+          make -j$(nproc)
+          sudo make install
+          cd ../..
+
+      # Download and extract Coverity tools
+      - name: Download Coverity Build Tool
+        run: |
           wget https://scan.coverity.com/download/linux64 \
             --post-data "token=${{ secrets.COVERITY_TOKEN }}&project=${{ github.repository }}" \
             -O coverity_tool.tgz
-          mkdir coverity_tool
-          tar -xvzf coverity_tool.tgz -C coverity_tool --strip-components=1
-          export PATH=$PWD/coverity_tool/bin:$PATH
-          echo "Coverity Tool installed successfully"
-          echo "Coverity version:"
-          coverity_tool/bin/cov-build --help | head -n 15
+          mkdir cov-analysis
+          tar xzf coverity_tool.tgz --strip-components=1 -C cov-analysis
+          echo "Coverity tool extracted to $(pwd)/cov-analysis"
 
-      - name: Build with Coverity (CMake, error tolerant)
+      # Configure the CMake project (create build directory properly)
+      - name: Configure project with CMake
         run: |
-          echo "Starting Coverity build..."
-          mkdir -p build cov-int
-          export PATH=$PWD/coverity_tool/bin:$PATH
+          mkdir -p build
           cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cd ..
 
-          # Configure project with CMake
-          cmake ..
-
-          # Compile project wrapped by Coverity, allow errors
-          cov-build --dir ../cov-int make -j$(nproc) || true
-
-          echo "Build finished (even if errors occurred)"
-          echo "Build summary:"
-          if [ -f ../cov-int/build-log.txt ]; then
-            grep -E "Emitted|ready for analysis" ../cov-int/build-log.txt || echo "No summary found"
-          else
-            echo "build-log.txt not found!"
-          fi
-
-      - name: Verify build-log.txt and size
+      # Build project with Coverity wrapper
+      - name: Build with Coverity
         run: |
-          if [ -f cov-int/build-log.txt ]; then
-            echo "build-log.txt exists:"
-            ls -lh cov-int/build-log.txt
-          else
-            echo "build-log.txt not found. Submission will fail."
-            exit 1
-          fi
-          du -sh cov-int || echo "Could not calculate cov-int size"
+          export PATH="$(pwd)/cov-analysis/bin:$PATH"
+          mkdir -p cov-int
+          cd build
+          cov-build --dir ../cov-int make -j$(nproc)
+          cd ..
 
-      - name: Compress results
+      # Package results into a tarball
+      - name: Package Coverity results
         run: |
-          tar cjvf myproject.tar.bz2 cov-int
-        id: compress
+          tar czf coverity-results.tgz cov-int
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: "coverity-scan-${{ github.run_id }}"
-          release_name: "Coverity Scan Results"
-          body: "Automated Coverity Scan Results"
-          draft: false
-          prerelease: false
-
-      - name: Upload artifact to release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: myproject.tar.bz2
-          asset_name: myproject.tar.bz2
-          asset_content_type: application/x-bzip2
-
-      - name: Notify Coverity Scan
+      # Upload analysis to Coverity
+      - name: Upload to Coverity Scan
         run: |
-          curl --data "project=${{ github.repository }}&token=${{ secrets.COVERITY_TOKEN }}&email=cpp.benchmark@proton.me&url=https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.tar.bz2&version=1.0&description=Automated+Coverity+Scan" https://scan.coverity.com/builds
+          curl --form token=${{ secrets.COVERITY_TOKEN }} \
+               --form email=${{ secrets.COVERITY_SCAN_EMAIL }} \
+               --form file=@coverity-results.tgz \
+               --form version="${{ github.sha }}" \
+               --form description="Automated Coverity Scan via GitHub Actions" \
+               https://scan.coverity.com/builds?project=${{ github.repository }}
