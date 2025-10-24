@@ -74,7 +74,7 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
+          install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch python
           path-type: inherit
 
       - name: Build with Coverity
@@ -93,24 +93,89 @@ jobs:
           find coverity_tool -type d -maxdepth 3 || true
           echo "Listing top-level directories:"
           ls -1 || true
+
+          # Generate compile_commands.json first
+          echo "🔧 Generating compile_commands.json..."
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -G "Unix Makefiles" ..
+          cd ..
+          echo "✅ compile_commands.json generated"
+
+          # Run Coverity build analysis
+          echo "🔍 Running Coverity analysis..."
           "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
+
+          # Copy compile_commands.json to root directory
+          echo "📋 Copying compile_commands.json to root..."
+          cp build/compile_commands.json . || echo "⚠️ Warning: compile_commands.json not found in build directory"
+          echo "✅ compile_commands.json copied to root"
+
+          # Generate cli-diagnostics.json using our script
+          echo "📋 Generating cli-diagnostics.json..."
+          bash scripts/generate-coverity-diagnostics.sh || echo "⚠️ Warning: Failed to generate cli-diagnostics.json with script"
+
+          # Copy cli-diagnostics.json if it exists (either from Coverity or our script)
+          if [ -f "cov-int/output/cli-diagnostics.json" ]; then
+            echo "📋 Copying cli-diagnostics.json to root..."
+            cp cov-int/output/cli-diagnostics.json . || echo "⚠️ Warning: cli-diagnostics.json not found"
+            echo "✅ cli-diagnostics.json copied to root"
+          elif [ -f "cli-diagnostics.json" ]; then
+            echo "✅ cli-diagnostics.json already available in root directory"
+          else
+            echo "⚠️ Warning: cli-diagnostics.json not found in either location"
+          fi
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
-          if [ -f "cov-int/build-log.txt" ]; then
-            echo "✅ build-log.txt found"
-          elif [ -f "cov-int/output/cli-diagnostics.json" ]; then
-            echo "✅ cli-diagnostics.json found"
+          echo "🔍 Verifying generated files..."
+
+          # Check compile_commands.json
+          if [ -f "compile_commands.json" ]; then
+            echo "✅ compile_commands.json found in root directory"
+            echo "📊 compile_commands.json size: $(stat --format=%s compile_commands.json) bytes"
           else
-            echo "❌ No Coverity output found!"
+            echo "❌ compile_commands.json not found in root directory!"
+            exit 1
+          fi
+
+          # Check cli-diagnostics.json
+          if [ -f "cli-diagnostics.json" ]; then
+            echo "✅ cli-diagnostics.json found in root directory"
+            echo "📊 cli-diagnostics.json size: $(stat --format=%s cli-diagnostics.json) bytes"
+          elif [ -f "cov-int/output/cli-diagnostics.json" ]; then
+            echo "✅ cli-diagnostics.json found in cov-int/output/"
+          else
+            echo "❌ cli-diagnostics.json not found!"
             echo "Listing cov-int contents:"
             ls -R cov-int || true
             exit 1
           fi
+
+          # Check other Coverity outputs
+          if [ -f "cov-int/build-log.txt" ]; then
+            echo "✅ build-log.txt found"
+          else
+            echo "❌ build-log.txt not found!"
+            exit 1
+          fi
+
+          echo "🎉 All required files generated successfully!"
       - name: Compress Results
         shell: powershell
         run: |
-          Compress-Archive -Path cov-int -DestinationPath myproject.zip
+          # Create a temporary directory for all artifacts
+          New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
+          Copy-Item -Path "cov-int" -Destination "artifacts" -Recurse -Force
+          if (Test-Path "compile_commands.json") {
+            Copy-Item -Path "compile_commands.json" -Destination "artifacts" -Force
+          }
+          if (Test-Path "cli-diagnostics.json") {
+            Copy-Item -Path "cli-diagnostics.json" -Destination "artifacts" -Force
+          }
+          Compress-Archive -Path artifacts -DestinationPath myproject.zip
+          Write-Output "📦 Artifacts compressed successfully"
+          Remove-Item -Path "artifacts" -Recurse -Force
         id: compress
 
       - name: Create GitHub Release
