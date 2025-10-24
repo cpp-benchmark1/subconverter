@@ -40,8 +40,14 @@ cd ..
 
 git clone https://github.com/ToruNiina/toml11 --branch v3.8.1 --depth=1
 cd toml11
-cmake -DCMAKE_INSTALL_PREFIX="$MINGW_PREFIX" -G "Unix Makefiles" -DCMAKE_CXX_STANDARD=11 .
-make install -j4
+# toml11 is header-only, install all headers
+install -d "$MINGW_PREFIX/include"
+install -m644 toml.hpp "$MINGW_PREFIX/include/"
+install -d "$MINGW_PREFIX/include/toml"
+# Install all toml11 headers from the toml directory
+for header in toml/*.hpp; do
+    install -m644 "$header" "$MINGW_PREFIX/include/toml/"
+done
 cd ..
 
 python -m ensurepip
@@ -49,7 +55,7 @@ python -m pip install gitpython
 python scripts/update_rules.py -c scripts/rules_config.conf
 
 rm -f C:/Strawberry/perl/bin/pkg-config C:/Strawberry/perl/bin/pkg-config.bat
-cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" .
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$MINGW_PREFIX" -G "Unix Makefiles" .
 make -j4
 rm subconverter.exe
 # shellcheck disable=SC2046

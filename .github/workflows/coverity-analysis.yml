@@ -98,7 +98,7 @@ jobs:
           echo "🔧 Generating compile_commands.json..."
           mkdir -p build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -G "Unix Makefiles" ..
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_PREFIX_PATH="$MINGW_PREFIX" -G "Unix Makefiles" ..
           cd ..
           echo "✅ compile_commands.json generated"
 
