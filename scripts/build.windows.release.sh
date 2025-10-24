@@ -38,11 +38,14 @@ cmake -DRAPIDJSON_BUILD_DOC=OFF -DRAPIDJSON_BUILD_EXAMPLES=OFF -DRAPIDJSON_BUILD
 make install -j4
 cd ..
 
+echo "Installing toml11..."
 git clone https://github.com/ToruNiina/toml11 --branch v3.8.1 --depth=1
 cd toml11
+
 # toml11 is header-only, install all headers
 install -d "$MINGW_PREFIX/include"
 install -m644 toml.hpp "$MINGW_PREFIX/include/"
+
 install -d "$MINGW_PREFIX/include/toml"
 # Install all toml11 headers from the toml directory
 for header in toml/*.hpp; do

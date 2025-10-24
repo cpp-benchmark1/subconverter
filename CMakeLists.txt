@@ -86,8 +86,29 @@ TARGET_COMPILE_DEFINITIONS(${BUILD_TARGET_NAME} PRIVATE -DCURL_STATICLIB)
 FIND_PACKAGE(Rapidjson REQUIRED)
 TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
 
-FIND_PACKAGE(toml11 REQUIRED)
-TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${TOML11_INCLUDE_DIRS})
+# toml11 is header-only, find it directly
+find_path(TOML11_INCLUDE_DIRS
+  NAMES toml.hpp
+  HINTS
+    $ENV{MINGW_PREFIX}/include
+    $ENV{MINGW_PREFIX}
+    /mingw64/include
+    /mingw64
+    /usr/include
+    /usr/local/include
+    /usr/include/toml11
+    /usr/local/include/toml11
+  PATH_SUFFIXES
+    ""
+    toml11
+)
+
+if(TOML11_INCLUDE_DIRS)
+  message(STATUS "Found toml11 header files in ${TOML11_INCLUDE_DIRS}")
+  TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${TOML11_INCLUDE_DIRS})
+else()
+  message(FATAL_ERROR "Could not find toml11 headers. Please install toml11 and ensure toml.hpp is available.")
+endif()
 
 PKG_CHECK_MODULES(YAML_CPP yaml-cpp>=0.6.3 REQUIRED)
 FIND_LIBRARY(YAML_CPP_LIBRARY NAMES yaml-cpp yaml-cppd PATHS ${YAML_CPP_LIBRARY_DIRS})

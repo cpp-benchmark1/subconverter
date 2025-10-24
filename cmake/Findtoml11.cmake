@@ -50,6 +50,11 @@ find_path(
     /mingw64
     /usr/include
     /usr/local/include
+    /usr/include/toml11
+    /usr/local/include/toml11
+  PATH_SUFFIXES
+    ""
+    toml11
   DOC "Include directory for the toml11 library."
 )
 

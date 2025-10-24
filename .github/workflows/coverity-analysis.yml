@@ -80,6 +80,11 @@ jobs:
       - name: Build with Coverity
         shell: msys2 {0}
         run: |
+          echo "🔍 Environment information:"
+          echo "MINGW_PREFIX: $MINGW_PREFIX"
+          echo "PATH: $PATH"
+          echo "Current directory: $(pwd)"
+
           covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
           if [ -z "$covFolder" ]; then
             echo "❌ Could not find the cov-analysis-win64 folder inside coverity_tool"
@@ -98,6 +103,8 @@ jobs:
           echo "🔧 Generating compile_commands.json..."
           mkdir -p build
           cd build
+          echo "Building in directory: $(pwd)"
+          echo "CMake configure command: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_PREFIX_PATH=\"$MINGW_PREFIX\" -G \"Unix Makefiles\" .."
           cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_PREFIX_PATH="$MINGW_PREFIX" -G "Unix Makefiles" ..
           cd ..
           echo "✅ compile_commands.json generated"
