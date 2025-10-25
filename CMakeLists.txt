@@ -98,6 +98,10 @@ find_path(TOML11_INCLUDE_DIRS
     /usr/local/include
     /usr/include/toml11
     /usr/local/include/toml11
+    /c/msys64/mingw64/include
+    /c/msys64/usr/include
+    /d/a/_temp/msys64/mingw64/include
+    /d/a/_temp/msys64/usr/include
   PATH_SUFFIXES
     ""
     toml11
@@ -107,6 +111,9 @@ if(TOML11_INCLUDE_DIRS)
   message(STATUS "Found toml11 header files in ${TOML11_INCLUDE_DIRS}")
   TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${TOML11_INCLUDE_DIRS})
 else()
+  message(STATUS "toml11 not found in any standard path. Current search paths:")
+  message(STATUS "  MINGW_PREFIX: $ENV{MINGW_PREFIX}")
+  message(STATUS "  PATH: $ENV{PATH}")
   message(FATAL_ERROR "Could not find toml11 headers. Please install toml11 and ensure toml.hpp is available.")
 endif()
 

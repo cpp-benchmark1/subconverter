@@ -84,6 +84,8 @@ jobs:
           echo "MINGW_PREFIX: $MINGW_PREFIX"
           echo "PATH: $PATH"
           echo "Current directory: $(pwd)"
+          echo "All environment variables:"
+          env | sort
 
           covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
           if [ -z "$covFolder" ]; then
@@ -111,12 +113,23 @@ jobs:
 
           # Run Coverity build analysis
           echo "🔍 Running Coverity analysis..."
+          echo "Coverity command: $covPath --dir cov-int bash -lc './scripts/build.windows.release.sh VERBOSE=1'"
           "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
 
           # Copy compile_commands.json to root directory
           echo "📋 Copying compile_commands.json to root..."
           cp build/compile_commands.json . || echo "⚠️ Warning: compile_commands.json not found in build directory"
           echo "✅ compile_commands.json copied to root"
+
+          # Verify toml11 installation
+          echo "🔍 Verifying toml11 installation..."
+          echo "MINGW_PREFIX: $MINGW_PREFIX"
+          if [ -n "$MINGW_PREFIX" ] && [ -d "$MINGW_PREFIX" ]; then
+            echo "Contents of MINGW_PREFIX/include:"
+            ls -la "$MINGW_PREFIX/include/" | grep -i toml || echo "No toml files found in MINGW_PREFIX/include"
+          else
+            echo "⚠️ Warning: MINGW_PREFIX not set or directory does not exist"
+          fi
 
           # Generate cli-diagnostics.json using our script
           echo "📋 Generating cli-diagnostics.json..."

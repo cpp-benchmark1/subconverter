@@ -39,18 +39,42 @@ make install -j4
 cd ..
 
 echo "Installing toml11..."
+echo "MINGW_PREFIX: '$MINGW_PREFIX'"
+
+# Verify MINGW_PREFIX is set and accessible
+if [ -z "$MINGW_PREFIX" ]; then
+    echo "❌ MINGW_PREFIX is not set!"
+    exit 1
+fi
+
+if [ ! -d "$MINGW_PREFIX" ]; then
+    echo "❌ MINGW_PREFIX directory does not exist: $MINGW_PREFIX"
+    exit 1
+fi
+
 git clone https://github.com/ToruNiina/toml11 --branch v3.8.1 --depth=1
 cd toml11
 
 # toml11 is header-only, install all headers
+echo "Installing toml11 headers to $MINGW_PREFIX/include"
 install -d "$MINGW_PREFIX/include"
-install -m644 toml.hpp "$MINGW_PREFIX/include/"
+install -m644 toml.hpp "$MINGW_PREFIX/include/" || {
+    echo "❌ Failed to install toml.hpp to $MINGW_PREFIX/include/"
+    exit 1
+}
 
 install -d "$MINGW_PREFIX/include/toml"
 # Install all toml11 headers from the toml directory
 for header in toml/*.hpp; do
-    install -m644 "$header" "$MINGW_PREFIX/include/toml/"
+    install -m644 "$header" "$MINGW_PREFIX/include/toml/" || {
+        echo "❌ Failed to install $header to $MINGW_PREFIX/include/toml/"
+        exit 1
+    }
 done
+
+echo "✅ toml11 installation completed"
+echo "Verifying installation:"
+ls -la "$MINGW_PREFIX/include/" | grep toml
 cd ..
 
 python -m ensurepip
