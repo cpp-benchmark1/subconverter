@@ -83,8 +83,29 @@ TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${CURL_INCLUDE_DIRS})
 TARGET_LINK_LIBRARIES(${BUILD_TARGET_NAME} PRIVATE CURL::libcurl)
 TARGET_COMPILE_DEFINITIONS(${BUILD_TARGET_NAME} PRIVATE -DCURL_STATICLIB)
 
-FIND_PACKAGE(Rapidjson REQUIRED)
-TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
+# rapidjson is header-only, find it directly
+find_path(RAPIDJSON_INCLUDE_DIRS
+  NAMES rapidjson/rapidjson.h
+  HINTS
+    $ENV{MINGW_PREFIX}/include
+    $ENV{MINGW_PREFIX}
+    /mingw64/include
+    /mingw64
+    /usr/include
+    /usr/local/include
+    # GitHub Actions MSYS2 paths
+    /c/msys64/mingw64/include
+    /c/msys64/usr/include
+    /d/a/_temp/msys64/mingw64/include
+    /d/a/_temp/msys64/usr/include
+)
+
+if(RAPIDJSON_INCLUDE_DIRS)
+  message(STATUS "Found rapidjson header files in ${RAPIDJSON_INCLUDE_DIRS}")
+  TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
+else()
+  message(FATAL_ERROR "Could not find rapidjson headers. Please install rapidjson and ensure rapidjson/rapidjson.h is available.")
+endif()
 
 # toml11 is header-only, find it directly
 find_path(TOML11_INCLUDE_DIRS
@@ -98,6 +119,7 @@ find_path(TOML11_INCLUDE_DIRS
     /usr/local/include
     /usr/include/toml11
     /usr/local/include/toml11
+    # GitHub Actions MSYS2 paths
     /c/msys64/mingw64/include
     /c/msys64/usr/include
     /d/a/_temp/msys64/mingw64/include

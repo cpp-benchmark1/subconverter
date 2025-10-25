@@ -32,14 +32,31 @@ cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$MI
 make libcron install -j4
 cd ..
 
+echo "Installing rapidjson..."
+echo "MINGW_PREFIX: $MINGW_PREFIX"
 git clone https://github.com/Tencent/rapidjson --depth=1
 cd rapidjson
+
+echo "Configuring rapidjson with CMAKE_INSTALL_PREFIX=$MINGW_PREFIX"
 cmake -DRAPIDJSON_BUILD_DOC=OFF -DRAPIDJSON_BUILD_EXAMPLES=OFF -DRAPIDJSON_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$MINGW_PREFIX" -G "Unix Makefiles" .
+echo "Building and installing rapidjson..."
 make install -j4
+
+echo "Verifying rapidjson installation:"
+if [ -d "$MINGW_PREFIX/include/rapidjson" ]; then
+    echo "✅ rapidjson found in $MINGW_PREFIX/include/rapidjson"
+    ls -la "$MINGW_PREFIX/include/rapidjson/"
+else
+    echo "❌ rapidjson NOT found in $MINGW_PREFIX/include/rapidjson"
+    echo "Contents of $MINGW_PREFIX/include:"
+    ls -la "$MINGW_PREFIX/include/" 2>/dev/null || echo "Cannot access MINGW_PREFIX/include"
+fi
+
 cd ..
 
-echo "Installing toml11..."
+echo "=== TOML11 INSTALLATION ==="
 echo "MINGW_PREFIX: '$MINGW_PREFIX'"
+echo "Current working directory: $(pwd)"
 
 # Verify MINGW_PREFIX is set and accessible
 if [ -z "$MINGW_PREFIX" ]; then
@@ -49,11 +66,34 @@ fi
 
 if [ ! -d "$MINGW_PREFIX" ]; then
     echo "❌ MINGW_PREFIX directory does not exist: $MINGW_PREFIX"
+    echo "Available directories in parent:"
+    ls -la "$(dirname "$MINGW_PREFIX")" 2>/dev/null || echo "Cannot access parent directory"
     exit 1
 fi
 
+echo "Installing toml11 from GitHub..."
 git clone https://github.com/ToruNiina/toml11 --branch v3.8.1 --depth=1
 cd toml11
+
+echo "toml11 cloned successfully"
+echo "Contents of toml11 directory:"
+ls -la
+
+# Check if toml.hpp exists
+if [ ! -f "toml.hpp" ]; then
+    echo "❌ toml.hpp not found in toml11 directory!"
+    ls -la
+    exit 1
+fi
+
+# Check if toml directory exists
+if [ ! -d "toml" ]; then
+    echo "❌ toml directory not found in toml11!"
+    exit 1
+fi
+
+echo "toml directory contents:"
+ls -la toml/
 
 # toml11 is header-only, install all headers
 echo "Installing toml11 headers to $MINGW_PREFIX/include"
@@ -64,8 +104,10 @@ install -m644 toml.hpp "$MINGW_PREFIX/include/" || {
 }
 
 install -d "$MINGW_PREFIX/include/toml"
+echo "Installing individual headers from toml directory..."
 # Install all toml11 headers from the toml directory
 for header in toml/*.hpp; do
+    echo "Installing $header to $MINGW_PREFIX/include/toml/"
     install -m644 "$header" "$MINGW_PREFIX/include/toml/" || {
         echo "❌ Failed to install $header to $MINGW_PREFIX/include/toml/"
         exit 1
@@ -74,7 +116,19 @@ done
 
 echo "✅ toml11 installation completed"
 echo "Verifying installation:"
-ls -la "$MINGW_PREFIX/include/" | grep toml
+echo "Contents of $MINGW_PREFIX/include:"
+ls -la "$MINGW_PREFIX/include/" | head -20
+
+if [ -f "$MINGW_PREFIX/include/toml.hpp" ]; then
+    echo "✅ SUCCESS: toml.hpp found in $MINGW_PREFIX/include/"
+else
+    echo "❌ FAILED: toml.hpp NOT found in $MINGW_PREFIX/include/"
+    echo "Checking if directory exists:"
+    ls -la "$MINGW_PREFIX/" 2>/dev/null || echo "MINGW_PREFIX directory not accessible"
+    exit 1
+fi
+
+echo "=== TOML11 INSTALLATION COMPLETE ==="
 cd ..
 
 python -m ensurepip

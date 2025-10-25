@@ -121,14 +121,25 @@ jobs:
           cp build/compile_commands.json . || echo "⚠️ Warning: compile_commands.json not found in build directory"
           echo "✅ compile_commands.json copied to root"
 
-          # Verify toml11 installation
-          echo "🔍 Verifying toml11 installation..."
+          # Verify library installations
+          echo "🔍 Verifying library installations..."
           echo "MINGW_PREFIX: $MINGW_PREFIX"
+          echo "Converted MINGW_PREFIX (MSYS2): $(cygpath -u "$MINGW_PREFIX" 2>/dev/null || echo 'cygpath not available')"
+
           if [ -n "$MINGW_PREFIX" ] && [ -d "$MINGW_PREFIX" ]; then
             echo "Contents of MINGW_PREFIX/include:"
-            ls -la "$MINGW_PREFIX/include/" | grep -i toml || echo "No toml files found in MINGW_PREFIX/include"
+            ls -la "$MINGW_PREFIX/include/" | head -20
+
+            echo "Looking for toml.hpp:"
+            find "$MINGW_PREFIX/include/" -name "toml.hpp" 2>/dev/null || echo "toml.hpp not found"
+
+            echo "Looking for rapidjson:"
+            find "$MINGW_PREFIX/include/" -name "*rapidjson*" -type d 2>/dev/null || echo "rapidjson not found"
           else
             echo "⚠️ Warning: MINGW_PREFIX not set or directory does not exist"
+            echo "Checking common MSYS2 locations:"
+            ls -la /mingw64/include/ 2>/dev/null | head -10 || echo "/mingw64/include not accessible"
+            ls -la /usr/include/ 2>/dev/null | head -10 || echo "/usr/include not accessible"
           fi
 
           # Generate cli-diagnostics.json using our script
