@@ -114,9 +114,9 @@ jobs:
           echo "✅ MINGW_PREFIX exists: $(test -d "$MINGW_PREFIX" && echo "Yes" || echo "No")"
 
           # Convert Windows paths to MSYS2 paths if needed
+          ORIGINAL_MINGW_PREFIX="$MINGW_PREFIX"
           if [[ "$MINGW_PREFIX" == D:* ]]; then
             echo "🔄 Converting Windows path to MSYS2 path..."
-            ORIGINAL_MINGW_PREFIX="$MINGW_PREFIX"
             MINGW_PREFIX=$(cygpath -u "$MINGW_PREFIX" 2>/dev/null || echo "$MINGW_PREFIX")
             echo "Original: $ORIGINAL_MINGW_PREFIX"
             echo "Converted: $MINGW_PREFIX"
@@ -127,6 +127,26 @@ jobs:
           # Additional MSYS2 path setup
           echo "🔧 Setting up MSYS2 environment..."
           export MSYS2_PATH_TYPE=inherit
+
+          # Ensure we're using Unix-style paths for the build
+          if [[ "$MINGW_PREFIX" == /d/* ]]; then
+            echo "✅ Already using MSYS2 Unix path: $MINGW_PREFIX"
+          elif [[ "$MINGW_PREFIX" == D:* ]]; then
+            echo "🔄 Converting Windows path to MSYS2 path..."
+            ORIGINAL_MINGW_PREFIX="$MINGW_PREFIX"
+            MINGW_PREFIX=$(cygpath -u "$MINGW_PREFIX" 2>/dev/null || echo "/mingw64")
+            echo "Original: $ORIGINAL_MINGW_PREFIX"
+            echo "Converted: $MINGW_PREFIX"
+          else
+            # Try to find the correct MSYS2 path
+            if [ -d "/mingw64" ]; then
+              MINGW_PREFIX="/mingw64"
+              echo "✅ Found /mingw64, using it as MINGW_PREFIX"
+            else
+              MINGW_PREFIX="/mingw64"
+              echo "✅ Using default MSYS2 path: $MINGW_PREFIX"
+            fi
+          fi
 
           # Check MSYS2 mount points
           echo "Checking MSYS2 mount points:"
@@ -201,15 +221,29 @@ jobs:
 
           # Test if headers are available
           echo "🔧 Testing if headers are available..."
+          echo "MINGW_PREFIX: $MINGW_PREFIX"
+          echo "Checking if MINGW_PREFIX/include exists:"
+          ls -la "$MINGW_PREFIX/include/" 2>/dev/null | head -10 || echo "MINGW_PREFIX/include not accessible"
+
           echo "Searching for rapidjson:"
-          find "$MINGW_PREFIX/include/" -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files found"
+          find "$MINGW_PREFIX/include/" -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files found in MINGW_PREFIX"
           find /mingw64/include/ -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files in /mingw64/include"
           find /usr/include/ -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files in /usr/include"
 
           echo "Searching for toml11:"
-          find "$MINGW_PREFIX/include/" -name "*toml*" 2>/dev/null || echo "No toml files found"
+          find "$MINGW_PREFIX/include/" -name "*toml*" 2>/dev/null || echo "No toml files found in MINGW_PREFIX"
           find /mingw64/include/ -name "*toml*" 2>/dev/null || echo "No toml files in /mingw64/include"
           find /usr/include/ -name "*toml*" 2>/dev/null || echo "No toml files in /usr/include"
+
+          # Test CMake with explicit paths
+          echo "🔧 Testing CMake with explicit library installation check..."
+          echo "Testing rapidjson search paths:"
+          for path in "$MINGW_PREFIX/include" "/mingw64/include" "/usr/include"; do
+            if [ -d "$path" ]; then
+              echo "  Checking $path:"
+              ls -la "$path" | grep -i rapidjson || echo "    No rapidjson found in $path"
+            fi
+          done
 
           # Test if we can find the headers manually
           echo "🔧 Manual header verification:"

@@ -52,6 +52,9 @@ echo "rapidjson cloned, checking structure:"
 ls -la
 
 # Check for rapidjson in the expected location
+echo "Checking rapidjson repository structure..."
+find . -name "*.h" -o -name "*.hpp" | head -10
+
 if [ -d "include/rapidjson" ]; then
     echo "Found include/rapidjson directory, copying..."
     cp -r include/rapidjson "$MINGW_PREFIX/include/" || {
@@ -59,6 +62,13 @@ if [ -d "include/rapidjson" ]; then
         exit 1
     }
     echo "✅ Copied include/rapidjson to $MINGW_PREFIX/include/"
+elif [ -d "rapidjson" ]; then
+    echo "Found rapidjson directory in root, copying..."
+    cp -r rapidjson "$MINGW_PREFIX/include/" || {
+        echo "❌ Failed to copy rapidjson directory"
+        exit 1
+    }
+    echo "✅ Copied rapidjson directory to $MINGW_PREFIX/include/"
 elif [ -f "include/rapidjson.h" ]; then
     echo "Found include/rapidjson.h, creating directory structure..."
     install -d "$MINGW_PREFIX/include/rapidjson"
@@ -71,9 +81,9 @@ elif [ -f "rapidjson.h" ]; then
     echo "✅ Created rapidjson directory structure"
 else
     echo "❌ rapidjson headers not found in expected locations!"
-    echo "Looking for header files:"
-    find . -name "*.h" | head -10
-    echo "Directory structure:"
+    echo "All files in rapidjson directory:"
+    find . -type f | head -20
+    echo "All directories:"
     find . -type d | head -10
     exit 1
 fi

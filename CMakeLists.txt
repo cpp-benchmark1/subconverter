@@ -98,19 +98,20 @@ find_path(RAPIDJSON_INCLUDE_DIRS
     /mingw64
     /usr/include
     /usr/local/include
-    # GitHub Actions MSYS2 paths (Windows format)
+    # GitHub Actions MSYS2 paths (Unix format)
     /c/msys64/mingw64/include
     /c/msys64/usr/include
-    /d/a/_temp/msys64/mingw64/include
-    /d/a/_temp/msys64/usr/include
-    # GitHub Actions MSYS2 paths (MSYS2 format)
-    C:/msys64/mingw64/include
-    C:/msys64/usr/include
-    D:/a/_temp/msys64/mingw64/include
-    D:/a/_temp/msys64/usr/include
   PATH_SUFFIXES
     ""
     rapidjson
+  NO_DEFAULT_PATH
+  NO_CMAKE_FIND_ROOT_PATH
+  NO_CMAKE_PATH
+  NO_CMAKE_ENVIRONMENT_PATH
+  NO_SYSTEM_ENVIRONMENT_PATH
+  NO_CMAKE_SYSTEM_PATH
+  NO_CMAKE_INSTALL_PREFIX
+  ONLY_CMAKE_FIND_ROOT_PATH
 )
 
 if(RAPIDJSON_INCLUDE_DIRS)
@@ -120,6 +121,13 @@ else()
   message(STATUS "rapidjson not found in standard paths. Current search paths:")
   message(STATUS "  MINGW_PREFIX: $ENV{MINGW_PREFIX}")
   message(STATUS "  PATH: $ENV{PATH}")
+  message(STATUS "  Checked locations:")
+  message(STATUS "    - $ENV{MINGW_PREFIX}/include")
+  message(STATUS "    - $ENV{MINGW_PREFIX}/include/rapidjson")
+  message(STATUS "    - /mingw64/include")
+  message(STATUS "    - /mingw64/include/rapidjson")
+  message(STATUS "    - /usr/include")
+  message(STATUS "    - /usr/include/rapidjson")
   message(FATAL_ERROR "Could not find rapidjson headers. Please install rapidjson and ensure rapidjson/rapidjson.h is available.")
 endif()
 
@@ -140,16 +148,9 @@ find_path(TOML11_INCLUDE_DIRS
     /usr/local/include
     /usr/include/toml11
     /usr/local/include/toml11
-    # GitHub Actions MSYS2 paths (Windows format)
+    # GitHub Actions MSYS2 paths (Unix format)
     /c/msys64/mingw64/include
     /c/msys64/usr/include
-    /d/a/_temp/msys64/mingw64/include
-    /d/a/_temp/msys64/usr/include
-    # GitHub Actions MSYS2 paths (MSYS2 format)
-    C:/msys64/mingw64/include
-    C:/msys64/usr/include
-    D:/a/_temp/msys64/mingw64/include
-    D:/a/_temp/msys64/usr/include
   PATH_SUFFIXES
     ""
     toml11
@@ -232,19 +233,20 @@ find_path(RAPIDJSON_INCLUDE_DIRS
     /mingw64
     /usr/include
     /usr/local/include
-    # GitHub Actions MSYS2 paths (Windows format)
+    # GitHub Actions MSYS2 paths (Unix format)
     /c/msys64/mingw64/include
     /c/msys64/usr/include
-    /d/a/_temp/msys64/mingw64/include
-    /d/a/_temp/msys64/usr/include
-    # GitHub Actions MSYS2 paths (MSYS2 format)
-    C:/msys64/mingw64/include
-    C:/msys64/usr/include
-    D:/a/_temp/msys64/mingw64/include
-    D:/a/_temp/msys64/usr/include
   PATH_SUFFIXES
     ""
     rapidjson
+  NO_DEFAULT_PATH
+  NO_CMAKE_FIND_ROOT_PATH
+  NO_CMAKE_PATH
+  NO_CMAKE_ENVIRONMENT_PATH
+  NO_SYSTEM_ENVIRONMENT_PATH
+  NO_CMAKE_SYSTEM_PATH
+  NO_CMAKE_INSTALL_PREFIX
+  ONLY_CMAKE_FIND_ROOT_PATH
 )
 
 if(RAPIDJSON_INCLUDE_DIRS)
