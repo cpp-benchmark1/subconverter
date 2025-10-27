@@ -4,9 +4,6 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/include/")
 
-# Enable compile_commands.json generation
-SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 IF(NOT CMAKE_BUILD_TYPE)
     SET(CMAKE_BUILD_TYPE Release)
 ENDIF()
@@ -83,88 +80,11 @@ TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${CURL_INCLUDE_DIRS})
 TARGET_LINK_LIBRARIES(${BUILD_TARGET_NAME} PRIVATE CURL::libcurl)
 TARGET_COMPILE_DEFINITIONS(${BUILD_TARGET_NAME} PRIVATE -DCURL_STATICLIB)
 
-# rapidjson is header-only, find it directly
-message(STATUS "Searching for rapidjson headers...")
-message(STATUS "  MINGW_PREFIX: $ENV{MINGW_PREFIX}")
-message(STATUS "  Checking paths: $ENV{MINGW_PREFIX}/include, /mingw64/include, /usr/include, etc.")
+FIND_PACKAGE(Rapidjson REQUIRED)
+TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
 
-find_path(RAPIDJSON_INCLUDE_DIRS
-  NAMES rapidjson/rapidjson.h rapidjson.h
-  HINTS
-    $ENV{MINGW_PREFIX}/include
-    $ENV{MINGW_PREFIX}
-    # Standard MSYS2 paths
-    /mingw64/include
-    /mingw64
-    /usr/include
-    /usr/local/include
-    # GitHub Actions MSYS2 paths (Unix format)
-    /c/msys64/mingw64/include
-    /c/msys64/usr/include
-  PATH_SUFFIXES
-    ""
-    rapidjson
-  NO_DEFAULT_PATH
-  NO_CMAKE_FIND_ROOT_PATH
-  NO_CMAKE_PATH
-  NO_CMAKE_ENVIRONMENT_PATH
-  NO_SYSTEM_ENVIRONMENT_PATH
-  NO_CMAKE_SYSTEM_PATH
-  NO_CMAKE_INSTALL_PREFIX
-  ONLY_CMAKE_FIND_ROOT_PATH
-)
-
-if(RAPIDJSON_INCLUDE_DIRS)
-  message(STATUS "Found rapidjson header files in ${RAPIDJSON_INCLUDE_DIRS}")
-  TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
-else()
-  message(STATUS "rapidjson not found in standard paths. Current search paths:")
-  message(STATUS "  MINGW_PREFIX: $ENV{MINGW_PREFIX}")
-  message(STATUS "  PATH: $ENV{PATH}")
-  message(STATUS "  Checked locations:")
-  message(STATUS "    - $ENV{MINGW_PREFIX}/include")
-  message(STATUS "    - $ENV{MINGW_PREFIX}/include/rapidjson")
-  message(STATUS "    - /mingw64/include")
-  message(STATUS "    - /mingw64/include/rapidjson")
-  message(STATUS "    - /usr/include")
-  message(STATUS "    - /usr/include/rapidjson")
-  message(FATAL_ERROR "Could not find rapidjson headers. Please install rapidjson and ensure rapidjson/rapidjson.h is available.")
-endif()
-
-# toml11 is header-only, find it directly
-message(STATUS "Searching for toml11 headers...")
-message(STATUS "  MINGW_PREFIX: $ENV{MINGW_PREFIX}")
-message(STATUS "  Checking paths: $ENV{MINGW_PREFIX}/include, /mingw64/include, /usr/include, etc.")
-
-find_path(TOML11_INCLUDE_DIRS
-  NAMES toml.hpp
-  HINTS
-    $ENV{MINGW_PREFIX}/include
-    $ENV{MINGW_PREFIX}
-    # Standard MSYS2 paths
-    /mingw64/include
-    /mingw64
-    /usr/include
-    /usr/local/include
-    /usr/include/toml11
-    /usr/local/include/toml11
-    # GitHub Actions MSYS2 paths (Unix format)
-    /c/msys64/mingw64/include
-    /c/msys64/usr/include
-  PATH_SUFFIXES
-    ""
-    toml11
-)
-
-if(TOML11_INCLUDE_DIRS)
-  message(STATUS "Found toml11 header files in ${TOML11_INCLUDE_DIRS}")
-  TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${TOML11_INCLUDE_DIRS})
-else()
-  message(STATUS "toml11 not found in any standard path. Current search paths:")
-  message(STATUS "  MINGW_PREFIX: $ENV{MINGW_PREFIX}")
-  message(STATUS "  PATH: $ENV{PATH}")
-  message(FATAL_ERROR "Could not find toml11 headers. Please install toml11 and ensure toml.hpp is available.")
-endif()
+FIND_PACKAGE(toml11 REQUIRED)
+TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${TOML11_INCLUDE_DIRS})
 
 PKG_CHECK_MODULES(YAML_CPP yaml-cpp>=0.6.3 REQUIRED)
 FIND_LIBRARY(YAML_CPP_LIBRARY NAMES yaml-cpp yaml-cppd PATHS ${YAML_CPP_LIBRARY_DIRS})
@@ -222,42 +142,8 @@ TARGET_COMPILE_DEFINITIONS(${BUILD_TARGET_NAME} PRIVATE -DNO_JS_RUNTIME -DNO_WEB
 
 TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PUBLIC src)
 
-# rapidjson is header-only, find it directly (same as main target)
-find_path(RAPIDJSON_INCLUDE_DIRS
-  NAMES rapidjson/rapidjson.h rapidjson.h
-  HINTS
-    $ENV{MINGW_PREFIX}/include
-    $ENV{MINGW_PREFIX}
-    # Standard MSYS2 paths
-    /mingw64/include
-    /mingw64
-    /usr/include
-    /usr/local/include
-    # GitHub Actions MSYS2 paths (Unix format)
-    /c/msys64/mingw64/include
-    /c/msys64/usr/include
-  PATH_SUFFIXES
-    ""
-    rapidjson
-  NO_DEFAULT_PATH
-  NO_CMAKE_FIND_ROOT_PATH
-  NO_CMAKE_PATH
-  NO_CMAKE_ENVIRONMENT_PATH
-  NO_SYSTEM_ENVIRONMENT_PATH
-  NO_CMAKE_SYSTEM_PATH
-  NO_CMAKE_INSTALL_PREFIX
-  ONLY_CMAKE_FIND_ROOT_PATH
-)
-
-if(RAPIDJSON_INCLUDE_DIRS)
-  message(STATUS "Found rapidjson header files in ${RAPIDJSON_INCLUDE_DIRS}")
-  TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
-else()
-  message(STATUS "rapidjson not found in standard paths. Current search paths:")
-  message(STATUS "  MINGW_PREFIX: $ENV{MINGW_PREFIX}")
-  message(STATUS "  PATH: $ENV{PATH}")
-  message(FATAL_ERROR "Could not find rapidjson headers. Please install rapidjson and ensure rapidjson/rapidjson.h is available.")
-endif()
+FIND_PACKAGE(Rapidjson REQUIRED)
+TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
 
 FIND_PACKAGE(PkgConfig REQUIRED)
 

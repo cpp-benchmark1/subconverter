@@ -74,122 +74,12 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch python
+          install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
           path-type: inherit
 
       - name: Build with Coverity
         shell: msys2 {0}
         run: |
-          echo "🔍 Environment information:"
-          echo "MINGW_PREFIX: $MINGW_PREFIX"
-          echo "PATH: $PATH"
-          echo "Current directory: $(pwd)"
-          echo "MSYSTEM: $MSYSTEM"
-          echo "All environment variables:"
-          env | sort
-
-          # Set MINGW_PREFIX if not already set
-          if [ -z "$MINGW_PREFIX" ]; then
-            echo "⚠️ MINGW_PREFIX not set, trying to determine it..."
-            if [ "$MSYSTEM" = "MINGW64" ]; then
-              export MINGW_PREFIX="/mingw64"
-              echo "✅ Set MINGW_PREFIX to $MINGW_PREFIX based on MSYSTEM"
-            elif [ -d "/mingw64" ]; then
-              export MINGW_PREFIX="/mingw64"
-              echo "✅ Set MINGW_PREFIX to /mingw64 (found directory)"
-            elif [ -d "/c/msys64/mingw64" ]; then
-              export MINGW_PREFIX="/c/msys64/mingw64"
-              echo "✅ Set MINGW_PREFIX to /c/msys64/mingw64 (GitHub Actions path)"
-            else
-              echo "❌ Cannot determine MINGW_PREFIX"
-              echo "Available directories in /mingw64:"
-              ls -la /mingw64/ 2>/dev/null || echo "/mingw64 not accessible"
-              echo "Available directories in /c/msys64:"
-              ls -la /c/msys64/ 2>/dev/null || echo "/c/msys64 not accessible"
-              exit 1
-            fi
-          fi
-
-          echo "✅ Final MINGW_PREFIX: $MINGW_PREFIX"
-          echo "✅ MINGW_PREFIX exists: $(test -d "$MINGW_PREFIX" && echo "Yes" || echo "No")"
-
-          # Convert Windows paths to MSYS2 paths if needed
-          ORIGINAL_MINGW_PREFIX="$MINGW_PREFIX"
-          if [[ "$MINGW_PREFIX" == D:* ]]; then
-            echo "🔄 Converting Windows path to MSYS2 path..."
-            MINGW_PREFIX=$(cygpath -u "$MINGW_PREFIX" 2>/dev/null || echo "$MINGW_PREFIX")
-            echo "Original: $ORIGINAL_MINGW_PREFIX"
-            echo "Converted: $MINGW_PREFIX"
-            echo "cygpath command: cygpath -u '$ORIGINAL_MINGW_PREFIX'"
-            cygpath -u "$ORIGINAL_MINGW_PREFIX" 2>/dev/null || echo "cygpath conversion failed"
-          fi
-
-          # Additional MSYS2 path setup
-          echo "🔧 Setting up MSYS2 environment..."
-          export MSYS2_PATH_TYPE=inherit
-
-          # Ensure we're using Unix-style paths for the build
-          if [[ "$MINGW_PREFIX" == /d/* ]]; then
-            echo "✅ Already using MSYS2 Unix path: $MINGW_PREFIX"
-          elif [[ "$MINGW_PREFIX" == D:* ]]; then
-            echo "🔄 Converting Windows path to MSYS2 path..."
-            ORIGINAL_MINGW_PREFIX="$MINGW_PREFIX"
-            MINGW_PREFIX=$(cygpath -u "$MINGW_PREFIX" 2>/dev/null || echo "/mingw64")
-            echo "Original: $ORIGINAL_MINGW_PREFIX"
-            echo "Converted: $MINGW_PREFIX"
-          else
-            # Try to find the correct MSYS2 path
-            if [ -d "/mingw64" ]; then
-              MINGW_PREFIX="/mingw64"
-              echo "✅ Found /mingw64, using it as MINGW_PREFIX"
-            else
-              MINGW_PREFIX="/mingw64"
-              echo "✅ Using default MSYS2 path: $MINGW_PREFIX"
-            fi
-          fi
-
-          # Check MSYS2 mount points
-          echo "Checking MSYS2 mount points:"
-          mount | head -10 || echo "mount command not available"
-          df -h | head -10 || echo "df command not available"
-
-          echo "✅ Final MSYS2 MINGW_PREFIX: $MINGW_PREFIX"
-          echo "✅ MSYS2 MINGW_PREFIX exists: $(test -d "$MINGW_PREFIX" && echo "Yes" || echo "No")"
-
-          # Check if we need to use MSYS2 mount points
-          if [ ! -d "$MINGW_PREFIX" ]; then
-            echo "⚠️ MINGW_PREFIX directory not found, checking MSYS2 mount points..."
-            # Try to find the actual MSYS2 installation
-            if [ -d "/mingw64" ]; then
-              export MINGW_PREFIX="/mingw64"
-              echo "✅ Found /mingw64, using it as MINGW_PREFIX"
-            elif [ -d "/c/msys64/mingw64" ]; then
-              export MINGW_PREFIX="/c/msys64/mingw64"
-              echo "✅ Found /c/msys64/mingw64, using it as MINGW_PREFIX"
-            else
-              echo "❌ Cannot find MSYS2 installation"
-              echo "Checking common locations:"
-              ls -la /mingw64/ 2>/dev/null || echo "/mingw64 not accessible"
-              ls -la /c/msys64/ 2>/dev/null || echo "/c/msys64 not accessible"
-              ls -la /d/a/_temp/ 2>/dev/null | head -10 || echo "/d/a/_temp not accessible"
-              exit 1
-            fi
-          fi
-
-          echo "✅ Final working MINGW_PREFIX: $MINGW_PREFIX"
-          echo "✅ Directory exists: $(test -d "$MINGW_PREFIX" && echo "Yes" || echo "No")"
-
-          # Create include directory if it doesn't exist
-          if [ ! -d "$MINGW_PREFIX/include" ]; then
-            echo "📁 Creating $MINGW_PREFIX/include directory..."
-            install -d "$MINGW_PREFIX/include" || {
-              echo "❌ Failed to create $MINGW_PREFIX/include"
-              echo "Checking parent directory permissions:"
-              ls -la "$(dirname "$MINGW_PREFIX")" 2>/dev/null || echo "Cannot access parent directory"
-              exit 1
-            }
-          fi
-
           covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
           if [ -z "$covFolder" ]; then
             echo "❌ Could not find the cov-analysis-win64 folder inside coverity_tool"
@@ -203,162 +93,24 @@ jobs:
           find coverity_tool -type d -maxdepth 3 || true
           echo "Listing top-level directories:"
           ls -1 || true
-
-          # Generate compile_commands.json first
-          echo "🔧 Generating compile_commands.json..."
-          mkdir -p build
-          cd build
-          echo "Building in directory: $(pwd)"
-          echo "CMake configure command: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_PREFIX_PATH=\"$MINGW_PREFIX\" -G \"Unix Makefiles\" .."
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_PREFIX_PATH="$MINGW_PREFIX" -G "Unix Makefiles" ..
-          cd ..
-          echo "✅ compile_commands.json generated"
-
-          # Run Coverity build analysis
-          echo "🔍 Running Coverity analysis..."
-          echo "Coverity command: $covPath --dir cov-int bash -lc './scripts/build.windows.release.sh VERBOSE=1'"
           "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
-
-          # Test if headers are available
-          echo "🔧 Testing if headers are available..."
-          echo "MINGW_PREFIX: $MINGW_PREFIX"
-          echo "Checking if MINGW_PREFIX/include exists:"
-          ls -la "$MINGW_PREFIX/include/" 2>/dev/null | head -10 || echo "MINGW_PREFIX/include not accessible"
-
-          echo "Searching for rapidjson:"
-          find "$MINGW_PREFIX/include/" -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files found in MINGW_PREFIX"
-          find /mingw64/include/ -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files in /mingw64/include"
-          find /usr/include/ -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files in /usr/include"
-
-          echo "Searching for toml11:"
-          find "$MINGW_PREFIX/include/" -name "*toml*" 2>/dev/null || echo "No toml files found in MINGW_PREFIX"
-          find /mingw64/include/ -name "*toml*" 2>/dev/null || echo "No toml files in /mingw64/include"
-          find /usr/include/ -name "*toml*" 2>/dev/null || echo "No toml files in /usr/include"
-
-          # Test CMake with explicit paths
-          echo "🔧 Testing CMake with explicit library installation check..."
-          echo "Testing rapidjson search paths:"
-          for path in "$MINGW_PREFIX/include" "/mingw64/include" "/usr/include"; do
-            if [ -d "$path" ]; then
-              echo "  Checking $path:"
-              ls -la "$path" | grep -i rapidjson || echo "    No rapidjson found in $path"
-            fi
-          done
-
-          # Test if we can find the headers manually
-          echo "🔧 Manual header verification:"
-          echo "Checking for rapidjson.h:"
-          find "$MINGW_PREFIX/include/" -name "rapidjson.h" -type f 2>/dev/null || echo "rapidjson.h not found in MINGW_PREFIX"
-          find /mingw64/include/ -name "rapidjson.h" -type f 2>/dev/null || echo "rapidjson.h not found in /mingw64/include"
-          find /usr/include/ -name "rapidjson.h" -type f 2>/dev/null || echo "rapidjson.h not found in /usr/include"
-
-          echo "Checking for toml.hpp:"
-          find "$MINGW_PREFIX/include/" -name "toml.hpp" -type f 2>/dev/null || echo "toml.hpp not found in MINGW_PREFIX"
-          find /mingw64/include/ -name "toml.hpp" -type f 2>/dev/null || echo "toml.hpp not found in /mingw64/include"
-          find /usr/include/ -name "toml.hpp" -type f 2>/dev/null || echo "toml.hpp not found in /usr/include"
-
-          # Copy compile_commands.json to root directory
-          echo "📋 Copying compile_commands.json to root..."
-          cp build/compile_commands.json . || echo "⚠️ Warning: compile_commands.json not found in build directory"
-          echo "✅ compile_commands.json copied to root"
-
-          # Verify library installations
-          echo "🔍 Verifying library installations..."
-          echo "MINGW_PREFIX: $MINGW_PREFIX"
-          echo "Converted MINGW_PREFIX (MSYS2): $(cygpath -u "$MINGW_PREFIX" 2>/dev/null || echo 'cygpath not available')"
-
-          # Check if MINGW_PREFIX exists and is accessible
-          if [ -n "$MINGW_PREFIX" ] && [ -d "$MINGW_PREFIX" ]; then
-            echo "✅ MINGW_PREFIX directory exists: $MINGW_PREFIX"
-            echo "Contents of MINGW_PREFIX/include:"
-            ls -la "$MINGW_PREFIX/include/" | head -20
-
-            echo "Looking for toml.hpp:"
-            find "$MINGW_PREFIX/include/" -name "toml.hpp" 2>/dev/null || echo "toml.hpp not found in MINGW_PREFIX"
-
-            echo "Looking for rapidjson directory:"
-            find "$MINGW_PREFIX/include/" -name "*rapidjson*" -type d 2>/dev/null || echo "rapidjson directory not found in MINGW_PREFIX"
-
-            echo "Looking for rapidjson.h:"
-            find "$MINGW_PREFIX/include/" -name "rapidjson.h" 2>/dev/null || echo "rapidjson.h not found in MINGW_PREFIX"
-          else
-            echo "⚠️ Warning: MINGW_PREFIX not set or directory does not exist"
-            echo "Checking common MSYS2 locations:"
-            ls -la /mingw64/include/ 2>/dev/null | head -10 || echo "/mingw64/include not accessible"
-            ls -la /usr/include/ 2>/dev/null | head -10 || echo "/usr/include not accessible"
-          fi
-
-          echo "🔍 CMake search paths that will be used:"
-          echo "  - MINGW_PREFIX/include: $MINGW_PREFIX/include"
-          echo "  - /mingw64/include"
-          echo "  - /usr/include"
-          echo "  - GitHub Actions MSYS2 paths"
-
-          # Generate cli-diagnostics.json using our script
-          echo "📋 Generating cli-diagnostics.json..."
-          bash scripts/generate-coverity-diagnostics.sh || echo "⚠️ Warning: Failed to generate cli-diagnostics.json with script"
-
-          # Copy cli-diagnostics.json if it exists (either from Coverity or our script)
-          if [ -f "cov-int/output/cli-diagnostics.json" ]; then
-            echo "📋 Copying cli-diagnostics.json to root..."
-            cp cov-int/output/cli-diagnostics.json . || echo "⚠️ Warning: cli-diagnostics.json not found"
-            echo "✅ cli-diagnostics.json copied to root"
-          elif [ -f "cli-diagnostics.json" ]; then
-            echo "✅ cli-diagnostics.json already available in root directory"
-          else
-            echo "⚠️ Warning: cli-diagnostics.json not found in either location"
-          fi
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
-          echo "🔍 Verifying generated files..."
-
-          # Check compile_commands.json
-          if [ -f "compile_commands.json" ]; then
-            echo "✅ compile_commands.json found in root directory"
-            echo "📊 compile_commands.json size: $(stat --format=%s compile_commands.json) bytes"
-          else
-            echo "❌ compile_commands.json not found in root directory!"
-            exit 1
-          fi
-
-          # Check cli-diagnostics.json
-          if [ -f "cli-diagnostics.json" ]; then
-            echo "✅ cli-diagnostics.json found in root directory"
-            echo "📊 cli-diagnostics.json size: $(stat --format=%s cli-diagnostics.json) bytes"
+          if [ -f "cov-int/build-log.txt" ]; then
+            echo "✅ build-log.txt found"
           elif [ -f "cov-int/output/cli-diagnostics.json" ]; then
-            echo "✅ cli-diagnostics.json found in cov-int/output/"
+            echo "✅ cli-diagnostics.json found"
           else
-            echo "❌ cli-diagnostics.json not found!"
+            echo "❌ No Coverity output found!"
             echo "Listing cov-int contents:"
             ls -R cov-int || true
             exit 1
           fi
-
-          # Check other Coverity outputs
-          if [ -f "cov-int/build-log.txt" ]; then
-            echo "✅ build-log.txt found"
-          else
-            echo "❌ build-log.txt not found!"
-            exit 1
-          fi
-
-          echo "🎉 All required files generated successfully!"
       - name: Compress Results
         shell: powershell
         run: |
-          # Create a temporary directory for all artifacts
-          New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
-          Copy-Item -Path "cov-int" -Destination "artifacts" -Recurse -Force
-          if (Test-Path "compile_commands.json") {
-            Copy-Item -Path "compile_commands.json" -Destination "artifacts" -Force
-          }
-          if (Test-Path "cli-diagnostics.json") {
-            Copy-Item -Path "cli-diagnostics.json" -Destination "artifacts" -Force
-          }
-          Compress-Archive -Path artifacts -DestinationPath myproject.zip
-          Write-Output "📦 Artifacts compressed successfully"
-          Remove-Item -Path "artifacts" -Recurse -Force
+          Compress-Archive -Path cov-int -DestinationPath myproject.zip
         id: compress
 
       - name: Create GitHub Release
