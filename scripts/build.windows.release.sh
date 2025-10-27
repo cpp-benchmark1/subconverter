@@ -34,41 +34,74 @@ cd ..
 
 echo "Installing rapidjson..."
 echo "MINGW_PREFIX: '$MINGW_PREFIX'"
+echo "Current working directory: $(pwd)"
 
 # Create include directory if it doesn't exist
-install -d "$MINGW_PREFIX/include"
+echo "Creating include directory..."
+install -d "$MINGW_PREFIX/include" || {
+    echo "❌ Failed to create $MINGW_PREFIX/include"
+    echo "Checking if MINGW_PREFIX exists: $(test -d "$MINGW_PREFIX" && echo "Yes" || echo "No")"
+    exit 1
+}
 
+echo "Cloning rapidjson..."
 git clone https://github.com/Tencent/rapidjson --depth=1
 cd rapidjson
 
-echo "rapidjson structure:"
+echo "rapidjson cloned, checking structure:"
 ls -la
 
-# rapidjson can have headers in different locations
-if [ -d "include" ]; then
-    echo "Found include directory, copying headers..."
-    cp -r include/* "$MINGW_PREFIX/include/"
-elif [ -d "rapidjson" ]; then
-    echo "Found rapidjson directory in root, copying..."
-    cp -r rapidjson "$MINGW_PREFIX/include/"
+# Check for rapidjson in the expected location
+if [ -d "include/rapidjson" ]; then
+    echo "Found include/rapidjson directory, copying..."
+    cp -r include/rapidjson "$MINGW_PREFIX/include/" || {
+        echo "❌ Failed to copy include/rapidjson"
+        exit 1
+    }
+    echo "✅ Copied include/rapidjson to $MINGW_PREFIX/include/"
+elif [ -f "include/rapidjson.h" ]; then
+    echo "Found include/rapidjson.h, creating directory structure..."
+    install -d "$MINGW_PREFIX/include/rapidjson"
+    cp include/*.h "$MINGW_PREFIX/include/rapidjson/" 2>/dev/null || echo "No .h files in include/"
+    echo "✅ Created rapidjson directory structure"
+elif [ -f "rapidjson.h" ]; then
+    echo "Found rapidjson.h in root, creating directory structure..."
+    install -d "$MINGW_PREFIX/include/rapidjson"
+    cp *.h "$MINGW_PREFIX/include/rapidjson/" 2>/dev/null || echo "No .h files in root"
+    echo "✅ Created rapidjson directory structure"
 else
-    echo "❌ Neither include nor rapidjson directory found!"
-    echo "Available files:"
-    find . -name "*.h" -o -name "*.hpp" | head -10
+    echo "❌ rapidjson headers not found in expected locations!"
+    echo "Looking for header files:"
+    find . -name "*.h" | head -10
+    echo "Directory structure:"
+    find . -type d | head -10
     exit 1
 fi
 
 echo "Verifying rapidjson installation:"
+echo "Contents of $MINGW_PREFIX/include:"
+ls -la "$MINGW_PREFIX/include/" | head -20
+
 if [ -d "$MINGW_PREFIX/include/rapidjson" ]; then
-    echo "✅ rapidjson found in $MINGW_PREFIX/include/rapidjson"
+    echo "✅ rapidjson directory found in $MINGW_PREFIX/include/"
     ls -la "$MINGW_PREFIX/include/rapidjson/" | head -10
+    echo "Checking if rapidjson.h exists in the directory:"
+    if [ -f "$MINGW_PREFIX/include/rapidjson/rapidjson.h" ]; then
+        echo "✅ rapidjson.h found in $MINGW_PREFIX/include/rapidjson/"
+    else
+        echo "❌ rapidjson.h NOT found in $MINGW_PREFIX/include/rapidjson/"
+        echo "Files in rapidjson directory:"
+        ls -la "$MINGW_PREFIX/include/rapidjson/"
+    fi
 elif [ -f "$MINGW_PREFIX/include/rapidjson.h" ]; then
     echo "✅ rapidjson.h found directly in $MINGW_PREFIX/include/"
     ls -la "$MINGW_PREFIX/include/rapidjson.h"
 else
     echo "❌ rapidjson NOT found in expected locations"
-    echo "Contents of $MINGW_PREFIX/include:"
-    ls -la "$MINGW_PREFIX/include/" 2>/dev/null | head -10 || echo "Cannot access MINGW_PREFIX/include"
+    echo "Checking if rapidjson files exist anywhere in MINGW_PREFIX:"
+    find "$MINGW_PREFIX/" -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files found"
+    echo "Checking if rapidjson directory exists anywhere:"
+    find "$MINGW_PREFIX/" -name "rapidjson" -type d 2>/dev/null || echo "No rapidjson directories found"
     exit 1
 fi
 

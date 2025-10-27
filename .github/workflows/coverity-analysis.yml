@@ -113,11 +113,59 @@ jobs:
           echo "✅ Final MINGW_PREFIX: $MINGW_PREFIX"
           echo "✅ MINGW_PREFIX exists: $(test -d "$MINGW_PREFIX" && echo "Yes" || echo "No")"
 
+          # Convert Windows paths to MSYS2 paths if needed
+          if [[ "$MINGW_PREFIX" == D:* ]]; then
+            echo "🔄 Converting Windows path to MSYS2 path..."
+            ORIGINAL_MINGW_PREFIX="$MINGW_PREFIX"
+            MINGW_PREFIX=$(cygpath -u "$MINGW_PREFIX" 2>/dev/null || echo "$MINGW_PREFIX")
+            echo "Original: $ORIGINAL_MINGW_PREFIX"
+            echo "Converted: $MINGW_PREFIX"
+            echo "cygpath command: cygpath -u '$ORIGINAL_MINGW_PREFIX'"
+            cygpath -u "$ORIGINAL_MINGW_PREFIX" 2>/dev/null || echo "cygpath conversion failed"
+          fi
+
+          # Additional MSYS2 path setup
+          echo "🔧 Setting up MSYS2 environment..."
+          export MSYS2_PATH_TYPE=inherit
+
+          # Check MSYS2 mount points
+          echo "Checking MSYS2 mount points:"
+          mount | head -10 || echo "mount command not available"
+          df -h | head -10 || echo "df command not available"
+
+          echo "✅ Final MSYS2 MINGW_PREFIX: $MINGW_PREFIX"
+          echo "✅ MSYS2 MINGW_PREFIX exists: $(test -d "$MINGW_PREFIX" && echo "Yes" || echo "No")"
+
+          # Check if we need to use MSYS2 mount points
+          if [ ! -d "$MINGW_PREFIX" ]; then
+            echo "⚠️ MINGW_PREFIX directory not found, checking MSYS2 mount points..."
+            # Try to find the actual MSYS2 installation
+            if [ -d "/mingw64" ]; then
+              export MINGW_PREFIX="/mingw64"
+              echo "✅ Found /mingw64, using it as MINGW_PREFIX"
+            elif [ -d "/c/msys64/mingw64" ]; then
+              export MINGW_PREFIX="/c/msys64/mingw64"
+              echo "✅ Found /c/msys64/mingw64, using it as MINGW_PREFIX"
+            else
+              echo "❌ Cannot find MSYS2 installation"
+              echo "Checking common locations:"
+              ls -la /mingw64/ 2>/dev/null || echo "/mingw64 not accessible"
+              ls -la /c/msys64/ 2>/dev/null || echo "/c/msys64 not accessible"
+              ls -la /d/a/_temp/ 2>/dev/null | head -10 || echo "/d/a/_temp not accessible"
+              exit 1
+            fi
+          fi
+
+          echo "✅ Final working MINGW_PREFIX: $MINGW_PREFIX"
+          echo "✅ Directory exists: $(test -d "$MINGW_PREFIX" && echo "Yes" || echo "No")"
+
           # Create include directory if it doesn't exist
           if [ ! -d "$MINGW_PREFIX/include" ]; then
             echo "📁 Creating $MINGW_PREFIX/include directory..."
             install -d "$MINGW_PREFIX/include" || {
               echo "❌ Failed to create $MINGW_PREFIX/include"
+              echo "Checking parent directory permissions:"
+              ls -la "$(dirname "$MINGW_PREFIX")" 2>/dev/null || echo "Cannot access parent directory"
               exit 1
             }
           fi
@@ -153,17 +201,27 @@ jobs:
 
           # Test if headers are available
           echo "🔧 Testing if headers are available..."
-          if [ -f "$MINGW_PREFIX/include/rapidjson/rapidjson.h" ] || [ -f "$MINGW_PREFIX/include/rapidjson.h" ]; then
-            echo "✅ rapidjson headers found"
-          else
-            echo "❌ rapidjson headers not found in expected locations"
-          fi
+          echo "Searching for rapidjson:"
+          find "$MINGW_PREFIX/include/" -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files found"
+          find /mingw64/include/ -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files in /mingw64/include"
+          find /usr/include/ -name "*rapidjson*" 2>/dev/null || echo "No rapidjson files in /usr/include"
 
-          if [ -f "$MINGW_PREFIX/include/toml.hpp" ]; then
-            echo "✅ toml11 headers found"
-          else
-            echo "❌ toml11 headers not found in expected locations"
-          fi
+          echo "Searching for toml11:"
+          find "$MINGW_PREFIX/include/" -name "*toml*" 2>/dev/null || echo "No toml files found"
+          find /mingw64/include/ -name "*toml*" 2>/dev/null || echo "No toml files in /mingw64/include"
+          find /usr/include/ -name "*toml*" 2>/dev/null || echo "No toml files in /usr/include"
+
+          # Test if we can find the headers manually
+          echo "🔧 Manual header verification:"
+          echo "Checking for rapidjson.h:"
+          find "$MINGW_PREFIX/include/" -name "rapidjson.h" -type f 2>/dev/null || echo "rapidjson.h not found in MINGW_PREFIX"
+          find /mingw64/include/ -name "rapidjson.h" -type f 2>/dev/null || echo "rapidjson.h not found in /mingw64/include"
+          find /usr/include/ -name "rapidjson.h" -type f 2>/dev/null || echo "rapidjson.h not found in /usr/include"
+
+          echo "Checking for toml.hpp:"
+          find "$MINGW_PREFIX/include/" -name "toml.hpp" -type f 2>/dev/null || echo "toml.hpp not found in MINGW_PREFIX"
+          find /mingw64/include/ -name "toml.hpp" -type f 2>/dev/null || echo "toml.hpp not found in /mingw64/include"
+          find /usr/include/ -name "toml.hpp" -type f 2>/dev/null || echo "toml.hpp not found in /usr/include"
 
           # Copy compile_commands.json to root directory
           echo "📋 Copying compile_commands.json to root..."
