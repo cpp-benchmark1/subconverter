@@ -84,8 +84,43 @@ jobs:
           echo "MINGW_PREFIX: $MINGW_PREFIX"
           echo "PATH: $PATH"
           echo "Current directory: $(pwd)"
+          echo "MSYSTEM: $MSYSTEM"
           echo "All environment variables:"
           env | sort
+
+          # Set MINGW_PREFIX if not already set
+          if [ -z "$MINGW_PREFIX" ]; then
+            echo "⚠️ MINGW_PREFIX not set, trying to determine it..."
+            if [ "$MSYSTEM" = "MINGW64" ]; then
+              export MINGW_PREFIX="/mingw64"
+              echo "✅ Set MINGW_PREFIX to $MINGW_PREFIX based on MSYSTEM"
+            elif [ -d "/mingw64" ]; then
+              export MINGW_PREFIX="/mingw64"
+              echo "✅ Set MINGW_PREFIX to /mingw64 (found directory)"
+            elif [ -d "/c/msys64/mingw64" ]; then
+              export MINGW_PREFIX="/c/msys64/mingw64"
+              echo "✅ Set MINGW_PREFIX to /c/msys64/mingw64 (GitHub Actions path)"
+            else
+              echo "❌ Cannot determine MINGW_PREFIX"
+              echo "Available directories in /mingw64:"
+              ls -la /mingw64/ 2>/dev/null || echo "/mingw64 not accessible"
+              echo "Available directories in /c/msys64:"
+              ls -la /c/msys64/ 2>/dev/null || echo "/c/msys64 not accessible"
+              exit 1
+            fi
+          fi
+
+          echo "✅ Final MINGW_PREFIX: $MINGW_PREFIX"
+          echo "✅ MINGW_PREFIX exists: $(test -d "$MINGW_PREFIX" && echo "Yes" || echo "No")"
+
+          # Create include directory if it doesn't exist
+          if [ ! -d "$MINGW_PREFIX/include" ]; then
+            echo "📁 Creating $MINGW_PREFIX/include directory..."
+            install -d "$MINGW_PREFIX/include" || {
+              echo "❌ Failed to create $MINGW_PREFIX/include"
+              exit 1
+            }
+          fi
 
           covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
           if [ -z "$covFolder" ]; then
@@ -116,6 +151,20 @@ jobs:
           echo "Coverity command: $covPath --dir cov-int bash -lc './scripts/build.windows.release.sh VERBOSE=1'"
           "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
 
+          # Test if headers are available
+          echo "🔧 Testing if headers are available..."
+          if [ -f "$MINGW_PREFIX/include/rapidjson/rapidjson.h" ] || [ -f "$MINGW_PREFIX/include/rapidjson.h" ]; then
+            echo "✅ rapidjson headers found"
+          else
+            echo "❌ rapidjson headers not found in expected locations"
+          fi
+
+          if [ -f "$MINGW_PREFIX/include/toml.hpp" ]; then
+            echo "✅ toml11 headers found"
+          else
+            echo "❌ toml11 headers not found in expected locations"
+          fi
+
           # Copy compile_commands.json to root directory
           echo "📋 Copying compile_commands.json to root..."
           cp build/compile_commands.json . || echo "⚠️ Warning: compile_commands.json not found in build directory"
@@ -126,21 +175,32 @@ jobs:
           echo "MINGW_PREFIX: $MINGW_PREFIX"
           echo "Converted MINGW_PREFIX (MSYS2): $(cygpath -u "$MINGW_PREFIX" 2>/dev/null || echo 'cygpath not available')"
 
+          # Check if MINGW_PREFIX exists and is accessible
           if [ -n "$MINGW_PREFIX" ] && [ -d "$MINGW_PREFIX" ]; then
+            echo "✅ MINGW_PREFIX directory exists: $MINGW_PREFIX"
             echo "Contents of MINGW_PREFIX/include:"
             ls -la "$MINGW_PREFIX/include/" | head -20
 
             echo "Looking for toml.hpp:"
-            find "$MINGW_PREFIX/include/" -name "toml.hpp" 2>/dev/null || echo "toml.hpp not found"
+            find "$MINGW_PREFIX/include/" -name "toml.hpp" 2>/dev/null || echo "toml.hpp not found in MINGW_PREFIX"
 
-            echo "Looking for rapidjson:"
-            find "$MINGW_PREFIX/include/" -name "*rapidjson*" -type d 2>/dev/null || echo "rapidjson not found"
+            echo "Looking for rapidjson directory:"
+            find "$MINGW_PREFIX/include/" -name "*rapidjson*" -type d 2>/dev/null || echo "rapidjson directory not found in MINGW_PREFIX"
+
+            echo "Looking for rapidjson.h:"
+            find "$MINGW_PREFIX/include/" -name "rapidjson.h" 2>/dev/null || echo "rapidjson.h not found in MINGW_PREFIX"
           else
             echo "⚠️ Warning: MINGW_PREFIX not set or directory does not exist"
             echo "Checking common MSYS2 locations:"
             ls -la /mingw64/include/ 2>/dev/null | head -10 || echo "/mingw64/include not accessible"
             ls -la /usr/include/ 2>/dev/null | head -10 || echo "/usr/include not accessible"
           fi
+
+          echo "🔍 CMake search paths that will be used:"
+          echo "  - MINGW_PREFIX/include: $MINGW_PREFIX/include"
+          echo "  - /mingw64/include"
+          echo "  - /usr/include"
+          echo "  - GitHub Actions MSYS2 paths"
 
           # Generate cli-diagnostics.json using our script
           echo "📋 Generating cli-diagnostics.json..."

@@ -33,23 +33,43 @@ make libcron install -j4
 cd ..
 
 echo "Installing rapidjson..."
-echo "MINGW_PREFIX: $MINGW_PREFIX"
+echo "MINGW_PREFIX: '$MINGW_PREFIX'"
+
+# Create include directory if it doesn't exist
+install -d "$MINGW_PREFIX/include"
+
 git clone https://github.com/Tencent/rapidjson --depth=1
 cd rapidjson
 
-echo "Configuring rapidjson with CMAKE_INSTALL_PREFIX=$MINGW_PREFIX"
-cmake -DRAPIDJSON_BUILD_DOC=OFF -DRAPIDJSON_BUILD_EXAMPLES=OFF -DRAPIDJSON_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$MINGW_PREFIX" -G "Unix Makefiles" .
-echo "Building and installing rapidjson..."
-make install -j4
+echo "rapidjson structure:"
+ls -la
+
+# rapidjson can have headers in different locations
+if [ -d "include" ]; then
+    echo "Found include directory, copying headers..."
+    cp -r include/* "$MINGW_PREFIX/include/"
+elif [ -d "rapidjson" ]; then
+    echo "Found rapidjson directory in root, copying..."
+    cp -r rapidjson "$MINGW_PREFIX/include/"
+else
+    echo "❌ Neither include nor rapidjson directory found!"
+    echo "Available files:"
+    find . -name "*.h" -o -name "*.hpp" | head -10
+    exit 1
+fi
 
 echo "Verifying rapidjson installation:"
 if [ -d "$MINGW_PREFIX/include/rapidjson" ]; then
     echo "✅ rapidjson found in $MINGW_PREFIX/include/rapidjson"
-    ls -la "$MINGW_PREFIX/include/rapidjson/"
+    ls -la "$MINGW_PREFIX/include/rapidjson/" | head -10
+elif [ -f "$MINGW_PREFIX/include/rapidjson.h" ]; then
+    echo "✅ rapidjson.h found directly in $MINGW_PREFIX/include/"
+    ls -la "$MINGW_PREFIX/include/rapidjson.h"
 else
-    echo "❌ rapidjson NOT found in $MINGW_PREFIX/include/rapidjson"
+    echo "❌ rapidjson NOT found in expected locations"
     echo "Contents of $MINGW_PREFIX/include:"
-    ls -la "$MINGW_PREFIX/include/" 2>/dev/null || echo "Cannot access MINGW_PREFIX/include"
+    ls -la "$MINGW_PREFIX/include/" 2>/dev/null | head -10 || echo "Cannot access MINGW_PREFIX/include"
+    exit 1
 fi
 
 cd ..

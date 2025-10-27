@@ -85,7 +85,7 @@ TARGET_COMPILE_DEFINITIONS(${BUILD_TARGET_NAME} PRIVATE -DCURL_STATICLIB)
 
 # rapidjson is header-only, find it directly
 find_path(RAPIDJSON_INCLUDE_DIRS
-  NAMES rapidjson/rapidjson.h
+  NAMES rapidjson/rapidjson.h rapidjson.h
   HINTS
     $ENV{MINGW_PREFIX}/include
     $ENV{MINGW_PREFIX}
@@ -98,12 +98,18 @@ find_path(RAPIDJSON_INCLUDE_DIRS
     /c/msys64/usr/include
     /d/a/_temp/msys64/mingw64/include
     /d/a/_temp/msys64/usr/include
+  PATH_SUFFIXES
+    ""
+    rapidjson
 )
 
 if(RAPIDJSON_INCLUDE_DIRS)
   message(STATUS "Found rapidjson header files in ${RAPIDJSON_INCLUDE_DIRS}")
   TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
 else()
+  message(STATUS "rapidjson not found in standard paths. Current search paths:")
+  message(STATUS "  MINGW_PREFIX: $ENV{MINGW_PREFIX}")
+  message(STATUS "  PATH: $ENV{PATH}")
   message(FATAL_ERROR "Could not find rapidjson headers. Please install rapidjson and ensure rapidjson/rapidjson.h is available.")
 endif()
 
@@ -195,8 +201,35 @@ TARGET_COMPILE_DEFINITIONS(${BUILD_TARGET_NAME} PRIVATE -DNO_JS_RUNTIME -DNO_WEB
 
 TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PUBLIC src)
 
-FIND_PACKAGE(Rapidjson REQUIRED)
-TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
+# rapidjson is header-only, find it directly (same as main target)
+find_path(RAPIDJSON_INCLUDE_DIRS
+  NAMES rapidjson/rapidjson.h rapidjson.h
+  HINTS
+    $ENV{MINGW_PREFIX}/include
+    $ENV{MINGW_PREFIX}
+    /mingw64/include
+    /mingw64
+    /usr/include
+    /usr/local/include
+    # GitHub Actions MSYS2 paths
+    /c/msys64/mingw64/include
+    /c/msys64/usr/include
+    /d/a/_temp/msys64/mingw64/include
+    /d/a/_temp/msys64/usr/include
+  PATH_SUFFIXES
+    ""
+    rapidjson
+)
+
+if(RAPIDJSON_INCLUDE_DIRS)
+  message(STATUS "Found rapidjson header files in ${RAPIDJSON_INCLUDE_DIRS}")
+  TARGET_INCLUDE_DIRECTORIES(${BUILD_TARGET_NAME} PRIVATE ${RAPIDJSON_INCLUDE_DIRS})
+else()
+  message(STATUS "rapidjson not found in standard paths. Current search paths:")
+  message(STATUS "  MINGW_PREFIX: $ENV{MINGW_PREFIX}")
+  message(STATUS "  PATH: $ENV{PATH}")
+  message(FATAL_ERROR "Could not find rapidjson headers. Please install rapidjson and ensure rapidjson/rapidjson.h is available.")
+endif()
 
 FIND_PACKAGE(PkgConfig REQUIRED)
 
