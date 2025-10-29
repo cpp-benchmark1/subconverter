@@ -93,7 +93,13 @@ jobs:
           find coverity_tool -type d -maxdepth 3 || true
           echo "Listing top-level directories:"
           ls -1 || true
-          "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
+          
+          # Ensure clean build directory
+          rm -rf cov-int
+          mkdir -p cov-int
+          
+          # Run cov-build with proper directory structure
+          "$covPath" --dir cov-int --fs-capture-search ./ bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
