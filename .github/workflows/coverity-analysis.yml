@@ -99,7 +99,7 @@ jobs:
           mkdir -p cov-int
           
           # Run cov-build with proper directory structure
-          "$covPath" --dir cov-int --fs-capture-search ./ bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
+          "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
