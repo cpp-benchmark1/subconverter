@@ -97,16 +97,16 @@ jobs:
           }
           
           if (-not $downloadSuccess) {
-            Write-Error "❌ Failed to download Coverity tool after $maxRetries attempts"
+            Write-Error "Failed to download Coverity tool after $maxRetries attempts"
             exit 1
           }
 
-          Write-Output "📂 Extracting Coverity tool..."
+          Write-Output "Extracting Coverity tool..."
           New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
           Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
-          Write-Output "✅ Coverity Tool installed successfully"
+          Write-Output "Coverity Tool installed successfully"
           Get-ChildItem -Recurse coverity_tool
 
       - name: Setup MSYS2
@@ -122,11 +122,11 @@ jobs:
         run: |
           covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
           if [ -z "$covFolder" ]; then
-            echo "❌ Could not find the cov-analysis-win64 folder inside coverity_tool"
+            echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
             exit 1
           fi
           covPath="$covFolder/bin/cov-build.exe"
-          echo "✅ Using Coverity at: $covPath"
+          echo "Using Coverity at: $covPath"
           SHA=$(git rev-parse --short HEAD)
           sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
           echo "Listing structure under coverity_tool (max 3 levels):"
@@ -162,7 +162,7 @@ jobs:
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
-          echo "🔍 Checking for required Coverity artifacts..."
+          echo "Checking for required Coverity artifacts..."
           echo "Current directory: $(pwd)"
           echo "Directory contents:"
           ls -la || true
@@ -170,21 +170,21 @@ jobs:
           
           echo "Checking cov-int directory structure:"
           if [ -d "cov-int" ]; then
-            echo "✅ cov-int directory exists"
+            echo "cov-int directory exists"
             echo "cov-int contents:"
             ls -la cov-int/ || true
             echo ""
             
             if [ -d "cov-int/output" ]; then
-              echo "✅ cov-int/output directory exists"
+              echo "cov-int/output directory exists"
               echo "cov-int/output contents:"
               ls -la cov-int/output/ || true
             else
-              echo "❌ cov-int/output directory missing"
+              echo "cov-int/output directory missing"
             fi
             echo ""
           else
-            echo "❌ cov-int directory missing!"
+            echo "cov-int directory missing!"
             exit 1
           fi
           
@@ -192,28 +192,28 @@ jobs:
           found_artifact=false
           
           if [ -f "cov-int/build-log.txt" ]; then
-            echo "✅ build-log.txt found"
+            echo "build-log.txt found"
             echo "build-log.txt size: $(du -h cov-int/build-log.txt)"
             found_artifact=true
           else
-            echo "❌ build-log.txt not found"
+            echo "build-log.txt not found"
           fi
           
           if [ -f "cov-int/output/cli-diagnostics.json" ]; then
-            echo "✅ cli-diagnostics.json found"
+            echo "cli-diagnostics.json found"
             echo "cli-diagnostics.json size: $(du -h cov-int/output/cli-diagnostics.json)"
             found_artifact=true
           else
-            echo "❌ cli-diagnostics.json not found"
+            echo "cli-diagnostics.json not found"
           fi
           
           if [ "$found_artifact" = false ]; then
-            echo "❌ No required Coverity artifacts found!"
+            echo "No required Coverity artifacts found!"
             echo "Full directory tree:"
             find cov-int -type f || true
             exit 1
           else
-            echo "✅ Required Coverity artifacts verified successfully"
+            echo "Required Coverity artifacts verified successfully"
           fi
       - name: Compress Results
         shell: powershell
