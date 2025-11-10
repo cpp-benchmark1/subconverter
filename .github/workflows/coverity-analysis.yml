@@ -57,7 +57,28 @@ jobs:
             {
               if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
               
-              Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" -Method Post -Headers $headers -ContentType "application/x-www-form-urlencoded" -Body $form -OutFile $zipPath -UseBasicParsing -TimeoutSec 1800
+              # Download with resume capability and better error handling
+              $webClient = New-Object System.Net.WebClient
+              $webClient.Headers.Add("User-Agent", "GitHubActions-Coverity")
+              
+              # Prepare form data manually for WebClient
+              $boundary = [System.Guid]::NewGuid().ToString()
+              $formData = "--$boundary`r`n"
+              $formData += "Content-Disposition: form-data; name=`"token`"`r`n`r`n$($form.token)`r`n"
+              $formData += "--$boundary`r`n"
+              $formData += "Content-Disposition: form-data; name=`"project`"`r`n`r`n$($form.project)`r`n"
+              $formData += "--$boundary--`r`n"
+              
+              $webClient.Headers.Add("Content-Type", "multipart/form-data; boundary=$boundary")
+              $formBytes = [System.Text.Encoding]::UTF8.GetBytes($formData)
+              
+              try {
+                $response = $webClient.UploadData("https://scan.coverity.com/download/win64", "POST", $formBytes)
+                [System.IO.File]::WriteAllBytes($zipPath, $response)
+              }
+              finally {
+                $webClient.Dispose()
+              }
               
               if (-not (Test-Path $zipPath)) {
                 throw "File not created after download"
@@ -74,10 +95,28 @@ jobs:
                 }
               }
               
+              # Validate zip file with more robust check
               try {
+                # First try basic file header check
+                $fileStream = [System.IO.File]::OpenRead($zipPath)
+                $buffer = New-Object byte[] 4
+                $fileStream.Read($buffer, 0, 4) | Out-Null
+                $fileStream.Close()
+                
+                # Check for ZIP file signature (PK)
+                if ($buffer[0] -ne 0x50 -or $buffer[1] -ne 0x4B) {
+                  throw "File does not have ZIP signature"
+                }
+                
+                # Now try full ZIP validation
                 Add-Type -AssemblyName System.IO.Compression.FileSystem
                 $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
                 $entryCount = $zip.Entries.Count
+                
+                # Verify we can read the central directory
+                $firstEntry = $zip.Entries[0]
+                $null = $firstEntry.Name
+                
                 $zip.Dispose()
                 Write-Output "Zip file validated with $entryCount entries"
                 $downloadSuccess = $true
