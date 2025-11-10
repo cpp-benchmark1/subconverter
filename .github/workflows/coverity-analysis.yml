@@ -122,15 +122,58 @@ jobs:
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
+          echo "🔍 Checking for required Coverity artifacts..."
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la || true
+          echo ""
+          
+          echo "Checking cov-int directory structure:"
+          if [ -d "cov-int" ]; then
+            echo "✅ cov-int directory exists"
+            echo "cov-int contents:"
+            ls -la cov-int/ || true
+            echo ""
+            
+            if [ -d "cov-int/output" ]; then
+              echo "✅ cov-int/output directory exists"
+              echo "cov-int/output contents:"
+              ls -la cov-int/output/ || true
+            else
+              echo "❌ cov-int/output directory missing"
+            fi
+            echo ""
+          else
+            echo "❌ cov-int directory missing!"
+            exit 1
+          fi
+          
+          # Check for required files
+          found_artifact=false
+          
           if [ -f "cov-int/build-log.txt" ]; then
             echo "✅ build-log.txt found"
-          elif [ -f "cov-int/output/cli-diagnostics.json" ]; then
-            echo "✅ cli-diagnostics.json found"
+            echo "build-log.txt size: $(du -h cov-int/build-log.txt)"
+            found_artifact=true
           else
-            echo "❌ No Coverity output found!"
-            echo "Listing cov-int contents:"
-            ls -R cov-int || true
+            echo "❌ build-log.txt not found"
+          fi
+          
+          if [ -f "cov-int/output/cli-diagnostics.json" ]; then
+            echo "✅ cli-diagnostics.json found"
+            echo "cli-diagnostics.json size: $(du -h cov-int/output/cli-diagnostics.json)"
+            found_artifact=true
+          else
+            echo "❌ cli-diagnostics.json not found"
+          fi
+          
+          if [ "$found_artifact" = false ]; then
+            echo "❌ No required Coverity artifacts found!"
+            echo "Full directory tree:"
+            find cov-int -type f || true
             exit 1
+          else
+            echo "✅ Required Coverity artifacts verified successfully"
           fi
       - name: Compress Results
         shell: powershell
