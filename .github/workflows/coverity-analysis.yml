@@ -265,16 +265,65 @@ jobs:
         run: |
           Write-Output "Submitting results to Coverity Scan..."
           try {
-            $form = @{
-              token       = "${{ secrets.COVERITY_TOKEN }}"
-              email       = "${{ secrets.COVERITY_EMAIL }}"
-              file        = Get-Item "myproject.zip"
-              version     = "${{ github.sha }}"
-              description = "Automated Coverity Scan from GitHub Actions"
-            }
+            # Create multipart form data manually
+            $boundary = [System.Guid]::NewGuid().ToString()
+            $LF = "`r`n"
             
-            Invoke-RestMethod -Uri "https://scan.coverity.com/builds?project=${{ secrets.COVERITY_PROJECT_NAME }}" -Method Post -Form $form
-            Write-Output "Successfully submitted to Coverity Scan"
+            # Read the zip file
+            $fileBytes = [System.IO.File]::ReadAllBytes("myproject.zip")
+            $fileName = "myproject.zip"
+            
+            # Build the form data
+            $bodyLines = @()
+            $bodyLines += "--$boundary"
+            $bodyLines += "Content-Disposition: form-data; name=`"token`""
+            $bodyLines += ""
+            $bodyLines += "${{ secrets.COVERITY_TOKEN }}"
+            
+            $bodyLines += "--$boundary"
+            $bodyLines += "Content-Disposition: form-data; name=`"email`""
+            $bodyLines += ""
+            $bodyLines += "${{ secrets.COVERITY_EMAIL }}"
+            
+            $bodyLines += "--$boundary"
+            $bodyLines += "Content-Disposition: form-data; name=`"version`""
+            $bodyLines += ""
+            $bodyLines += "${{ github.sha }}"
+            
+            $bodyLines += "--$boundary"
+            $bodyLines += "Content-Disposition: form-data; name=`"description`""
+            $bodyLines += ""
+            $bodyLines += "Automated Coverity Scan from GitHub Actions"
+            
+            $bodyLines += "--$boundary"
+            $bodyLines += "Content-Disposition: form-data; name=`"file`"; filename=`"$fileName`""
+            $bodyLines += "Content-Type: application/zip"
+            $bodyLines += ""
+            
+            # Convert text part to bytes
+            $bodyText = $bodyLines -join $LF
+            $bodyTextBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyText + $LF)
+            
+            # Create closing boundary
+            $closingBoundary = ($LF + "--$boundary--" + $LF)
+            $closingBytes = [System.Text.Encoding]::UTF8.GetBytes($closingBoundary)
+            
+            # Combine all parts
+            $totalBytes = $bodyTextBytes + $fileBytes + $closingBytes
+            
+            # Make the request
+            $webClient = New-Object System.Net.WebClient
+            $webClient.Headers.Add("Content-Type", "multipart/form-data; boundary=$boundary")
+            
+            try {
+              $response = $webClient.UploadData("https://scan.coverity.com/builds?project=${{ secrets.COVERITY_PROJECT_NAME }}", "POST", $totalBytes)
+              $responseText = [System.Text.Encoding]::UTF8.GetString($response)
+              Write-Output "Successfully submitted to Coverity Scan"
+              Write-Output "Response: $responseText"
+            }
+            finally {
+              $webClient.Dispose()
+            }
           }
           catch {
             Write-Error "Failed to submit to Coverity: $($_.Exception.Message)"
