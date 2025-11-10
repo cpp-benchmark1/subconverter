@@ -260,36 +260,23 @@ jobs:
           Compress-Archive -Path cov-int -DestinationPath myproject.zip
         id: compress
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: "coverity-scan-${{ github.run_id }}"
-          release_name: "Coverity Scan Results"
-          body: "Automated Coverity Scan Results"
-          draft: false
-          prerelease: false
-
-      - name: Upload Asset to Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: myproject.zip
-          asset_name: myproject.zip
-          asset_content_type: application/x-bzip2
-
-      - name: Notify Coverity Scan
+      - name: Submit to Coverity Scan
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
-            project     = "${{ github.repository }}"
-            token       = "${{ secrets.COVERITY_TOKEN }}"
-            email       = "cpp.benchmark@proton.me"
-            url         = "https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.zip"
-            version     = "1.0"
-            description = "Automated Coverity Scan"
+          Write-Output "Submitting results to Coverity Scan..."
+          try {
+            $form = @{
+              token       = "${{ secrets.COVERITY_TOKEN }}"
+              email       = "${{ secrets.COVERITY_EMAIL }}"
+              file        = Get-Item "myproject.zip"
+              version     = "${{ github.sha }}"
+              description = "Automated Coverity Scan from GitHub Actions"
+            }
+            
+            Invoke-RestMethod -Uri "https://scan.coverity.com/builds?project=${{ secrets.COVERITY_PROJECT_NAME }}" -Method Post -Form $form
+            Write-Output "Successfully submitted to Coverity Scan"
+          }
+          catch {
+            Write-Error "Failed to submit to Coverity: $($_.Exception.Message)"
+            exit 1
           }
