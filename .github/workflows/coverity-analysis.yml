@@ -48,54 +48,49 @@ jobs:
           $retryCount = 0
           $downloadSuccess = $false
 
-          while ($retryCount -lt $maxRetries -and -not $downloadSuccess) {
+          while ($retryCount -lt $maxRetries -and -not $downloadSuccess)
+          {
             $retryCount++
-            Write-Output "⬇️ Downloading Coverity tool (attempt $retryCount/$maxRetries)..."
+            Write-Output "Downloading Coverity tool (attempt $retryCount/$maxRetries)..."
             
-            try {
-              # Remove any existing corrupted file
+            try
+            {
               if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
               
-              Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" `
-                -Method Post `
-                -Headers $headers `
-                -ContentType "application/x-www-form-urlencoded" `
-                -Body $form `
-                -OutFile $zipPath -UseBasicParsing -TimeoutSec 1800
+              Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" -Method Post -Headers $headers -ContentType "application/x-www-form-urlencoded" -Body $form -OutFile $zipPath -UseBasicParsing -TimeoutSec 1800
               
-              # Validate download
               if (-not (Test-Path $zipPath)) {
                 throw "File not created after download"
               }
               
               $fileSize = (Get-Item $zipPath).Length
-              Write-Output "📦 Downloaded file size: $fileSize bytes"
+              Write-Output "Downloaded file size: $fileSize bytes"
               
-              # Check if file is too small (likely an error page)
               if ($fileSize -lt 1000000) {
-                Write-Output "⚠️ File seems too small, checking content..."
+                Write-Output "File seems too small, checking content..."
                 $content = Get-Content $zipPath -Raw -Encoding UTF8
                 if ($content -match "error|Error|ERROR") {
                   throw "Download returned error page instead of zip file"
                 }
               }
               
-              # Test zip file integrity
               try {
                 Add-Type -AssemblyName System.IO.Compression.FileSystem
                 $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
                 $entryCount = $zip.Entries.Count
                 $zip.Dispose()
-                Write-Output "✅ Zip file validated with $entryCount entries"
+                Write-Output "Zip file validated with $entryCount entries"
                 $downloadSuccess = $true
-              } catch {
+              }
+              catch {
                 throw "Zip file integrity check failed: $($_.Exception.Message)"
               }
-              
-            } catch {
-              Write-Output "❌ Download attempt $retryCount failed: $($_.Exception.Message)"
+            }
+            catch
+            {
+              Write-Output "Download attempt $retryCount failed: $($_.Exception.Message)"
               if ($retryCount -lt $maxRetries) {
-                Write-Output "⏳ Waiting 30 seconds before retry..."
+                Write-Output "Waiting 30 seconds before retry..."
                 Start-Sleep -Seconds 30
               }
             }
