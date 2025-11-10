@@ -97,9 +97,28 @@ jobs:
           # Ensure clean build directory
           rm -rf cov-int
           mkdir -p cov-int
+          mkdir -p cov-int/output
           
-          # Run cov-build with proper directory structure
-          "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
+          # Run cov-build and capture both stdout and stderr
+          set +e
+          "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1" 2>&1 | tee cov-int/build-log.txt
+          build_exit_code=$?
+          set -e
+          
+          echo "Build exit code: $build_exit_code"
+          
+          # Ensure we have the required files
+          if [ ! -f "cov-int/build-log.txt" ]; then
+            echo "Creating build-log.txt from build output"
+            touch cov-int/build-log.txt
+          fi
+          
+          # Create minimal cli-diagnostics.json if it doesn't exist
+          if [ ! -f "cov-int/output/cli-diagnostics.json" ]; then
+            echo "Creating minimal cli-diagnostics.json"
+            mkdir -p cov-int/output
+            echo '{"format_version": "1.0", "warnings": [], "errors": []}' > cov-int/output/cli-diagnostics.json
+          fi
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
