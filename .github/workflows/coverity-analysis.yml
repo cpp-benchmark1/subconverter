@@ -316,7 +316,8 @@ jobs:
             $webClient.Headers.Add("Content-Type", "multipart/form-data; boundary=$boundary")
             
             try {
-              $response = $webClient.UploadData("https://scan.coverity.com/builds?project=${{ secrets.COVERITY_PROJECT_NAME }}", "POST", $totalBytes)
+              # Use correct Coverity API URL with project parameter
+              $response = $webClient.UploadData("https://scan.coverity.com/builds?project=${{ github.repository }}", "POST", $totalBytes)
               $responseText = [System.Text.Encoding]::UTF8.GetString($response)
               Write-Output "Successfully submitted to Coverity Scan"
               Write-Output "Response: $responseText"
@@ -329,3 +330,13 @@ jobs:
             Write-Error "Failed to submit to Coverity: $($_.Exception.Message)"
             exit 1
           }
+
+      - name: Upload Coverity Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverity-results
+          path: |
+            cov-int/
+            myproject.zip
+          retention-days: 30
