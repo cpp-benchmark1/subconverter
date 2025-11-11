@@ -220,16 +220,18 @@ jobs:
           
           # Run Coverity analysis to generate actual cli-diagnostics.json
           echo "Running Coverity analysis..."
-          "$covFolder/bin/cov-analyze.exe" --dir cov-int --all --security --concurrency --webapp-security || true
+          "$covFolder/bin/cov-analyze.exe" --dir cov-int --all --security --concurrency --webapp-security
           
-          # If analysis didn't generate cli-diagnostics.json, create minimal version
+          # Verify that Coverity generated proper cli-diagnostics.json
           if [ ! -f "cov-int/output/cli-diagnostics.json" ]; then
-            echo "Analysis didn't generate cli-diagnostics.json, creating minimal version"
-            mkdir -p cov-int/output
-            echo '{"format_version": "1.0", "warnings": [], "errors": []}' > cov-int/output/cli-diagnostics.json
+            echo "ERROR: Coverity analysis failed to generate cli-diagnostics.json"
+            echo "This indicates the analysis didn't run properly"
+            exit 1
           else
-            echo "Analysis generated cli-diagnostics.json successfully"
+            echo "Coverity analysis generated cli-diagnostics.json successfully"
             ls -la cov-int/output/cli-diagnostics.json
+            echo "File contents:"
+            cat cov-int/output/cli-diagnostics.json
           fi
       - name: Verify Coverity output
         shell: msys2 {0}
