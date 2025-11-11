@@ -260,74 +260,60 @@ jobs:
           Compress-Archive -Path cov-int -DestinationPath myproject.zip
         id: compress
 
-      - name: Submit to Coverity Scan
+      - name: Create GitHub Release
+        id: create_release
         shell: powershell
         run: |
-          Write-Output "Submitting results to Coverity Scan..."
           try {
-            # Create multipart form data manually
-            $boundary = [System.Guid]::NewGuid().ToString()
-            $LF = "`r`n"
+            $tag = "coverity-scan-${{ github.run_id }}"
+            $headers = @{
+              "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+              "Accept" = "application/vnd.github.v3+json"
+            }
             
-            # Read the zip file
+            # Create release
+            $releaseData = @{
+              tag_name = $tag
+              name = "Coverity Scan Results"
+              body = "Automated Coverity Scan Results"
+              draft = $false
+              prerelease = $false
+            } | ConvertTo-Json
+            
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Method Post -Headers $headers -Body $releaseData -ContentType "application/json"
+            
+            # Upload asset
+            $uploadUrl = $release.upload_url -replace '\{\?name,label\}', "?name=myproject.zip"
             $fileBytes = [System.IO.File]::ReadAllBytes("myproject.zip")
-            $fileName = "myproject.zip"
+            $uploadHeaders = $headers.Clone()
+            $uploadHeaders["Content-Type"] = "application/zip"
             
-            # Build the form data
-            $bodyLines = @()
-            $bodyLines += "--$boundary"
-            $bodyLines += "Content-Disposition: form-data; name=`"token`""
-            $bodyLines += ""
-            $bodyLines += "${{ secrets.COVERITY_TOKEN }}"
+            Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $uploadHeaders -Body $fileBytes
             
-            $bodyLines += "--$boundary"
-            $bodyLines += "Content-Disposition: form-data; name=`"email`""
-            $bodyLines += ""
-            $bodyLines += "${{ secrets.COVERITY_EMAIL }}"
-            
-            $bodyLines += "--$boundary"
-            $bodyLines += "Content-Disposition: form-data; name=`"version`""
-            $bodyLines += ""
-            $bodyLines += "${{ github.sha }}"
-            
-            $bodyLines += "--$boundary"
-            $bodyLines += "Content-Disposition: form-data; name=`"description`""
-            $bodyLines += ""
-            $bodyLines += "Automated Coverity Scan from GitHub Actions"
-            
-            $bodyLines += "--$boundary"
-            $bodyLines += "Content-Disposition: form-data; name=`"file`"; filename=`"$fileName`""
-            $bodyLines += "Content-Type: application/zip"
-            $bodyLines += ""
-            
-            # Convert text part to bytes
-            $bodyText = $bodyLines -join $LF
-            $bodyTextBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyText + $LF)
-            
-            # Create closing boundary
-            $closingBoundary = ($LF + "--$boundary--" + $LF)
-            $closingBytes = [System.Text.Encoding]::UTF8.GetBytes($closingBoundary)
-            
-            # Combine all parts
-            $totalBytes = $bodyTextBytes + $fileBytes + $closingBytes
-            
-            # Make the request
-            $webClient = New-Object System.Net.WebClient
-            $webClient.Headers.Add("Content-Type", "multipart/form-data; boundary=$boundary")
-            
-            try {
-              # Use correct Coverity API URL with project parameter
-              $response = $webClient.UploadData("https://scan.coverity.com/builds?project=${{ github.repository }}", "POST", $totalBytes)
-              $responseText = [System.Text.Encoding]::UTF8.GetString($response)
-              Write-Output "Successfully submitted to Coverity Scan"
-              Write-Output "Response: $responseText"
-            }
-            finally {
-              $webClient.Dispose()
-            }
+            Write-Output "Release created successfully"
+            Write-Output "::set-output name=download_url::https://github.com/${{ github.repository }}/releases/download/$tag/myproject.zip"
           }
           catch {
-            Write-Error "Failed to submit to Coverity: $($_.Exception.Message)"
+            Write-Error "Failed to create release: $($_.Exception.Message)"
+            exit 1
+          }
+
+      - name: Notify Coverity Scan
+        shell: powershell
+        run: |
+          try {
+            Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
+              project     = "${{ github.repository }}"
+              token       = "${{ secrets.COVERITY_TOKEN }}"
+              email       = "cpp.benchmark@proton.me"
+              url         = "${{ steps.create_release.outputs.download_url }}"
+              version     = "${{ github.sha }}"
+              description = "Automated Coverity Scan"
+            }
+            Write-Output "Successfully notified Coverity Scan"
+          }
+          catch {
+            Write-Error "Failed to notify Coverity: $($_.Exception.Message)"
             exit 1
           }
 
