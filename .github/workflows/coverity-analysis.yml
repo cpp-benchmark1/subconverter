@@ -257,7 +257,20 @@ jobs:
       - name: Compress Results
         shell: powershell
         run: |
-          Compress-Archive -Path cov-int -DestinationPath myproject.zip
+          Write-Output "Checking archive contents before compression..."
+          Get-ChildItem -Recurse cov-int | Format-Table Name, FullName, Length
+          
+          Write-Output "Creating archive..."
+          Compress-Archive -Path cov-int -DestinationPath myproject.zip -Force
+          
+          Write-Output "Verifying archive contents..."
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead("myproject.zip")
+          Write-Output "Archive entries:"
+          $zip.Entries | ForEach-Object { Write-Output "  $($_.FullName) ($($_.Length) bytes)" }
+          $zip.Dispose()
+          
+          Write-Output "Archive file size: $((Get-Item myproject.zip).Length) bytes"
         id: compress
 
       - name: Create GitHub Release
