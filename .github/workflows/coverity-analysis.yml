@@ -218,11 +218,18 @@ jobs:
             touch cov-int/build-log.txt
           fi
           
-          # Create minimal cli-diagnostics.json if it doesn't exist
+          # Run Coverity analysis to generate actual cli-diagnostics.json
+          echo "Running Coverity analysis..."
+          "$covFolder/bin/cov-analyze.exe" --dir cov-int --all --security --concurrency --webapp-security || true
+          
+          # If analysis didn't generate cli-diagnostics.json, create minimal version
           if [ ! -f "cov-int/output/cli-diagnostics.json" ]; then
-            echo "Creating minimal cli-diagnostics.json"
+            echo "Analysis didn't generate cli-diagnostics.json, creating minimal version"
             mkdir -p cov-int/output
             echo '{"format_version": "1.0", "warnings": [], "errors": []}' > cov-int/output/cli-diagnostics.json
+          else
+            echo "Analysis generated cli-diagnostics.json successfully"
+            ls -la cov-int/output/cli-diagnostics.json
           fi
       - name: Verify Coverity output
         shell: msys2 {0}
