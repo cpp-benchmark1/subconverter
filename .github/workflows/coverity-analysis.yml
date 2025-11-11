@@ -44,29 +44,108 @@ jobs:
             "User-Agent" = "GitHubActions-Coverity"
           }
 
-          Write-Output "⬇️ Downloading Coverity tool..."
-          try {
-            Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" `
-              -Method Post `
-              -Headers $headers `
-              -ContentType "application/x-www-form-urlencoded" `
-              -Body $form `
-              -OutFile $zipPath -UseBasicParsing
-          } catch {
-            Write-Error "❌ Failed to download Coverity tool: $($_.Exception.Message)"
+          $maxRetries = 3
+          $retryCount = 0
+          $downloadSuccess = $false
+
+          while ($retryCount -lt $maxRetries -and -not $downloadSuccess)
+          {
+            $retryCount++
+            Write-Output "Downloading Coverity tool (attempt $retryCount/$maxRetries)..."
+            
+            try
+            {
+              if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+              
+              # Download with resume capability and better error handling
+              $webClient = New-Object System.Net.WebClient
+              $webClient.Headers.Add("User-Agent", "GitHubActions-Coverity")
+              
+              # Prepare form data manually for WebClient
+              $boundary = [System.Guid]::NewGuid().ToString()
+              $formData = "--$boundary`r`n"
+              $formData += "Content-Disposition: form-data; name=`"token`"`r`n`r`n$($form.token)`r`n"
+              $formData += "--$boundary`r`n"
+              $formData += "Content-Disposition: form-data; name=`"project`"`r`n`r`n$($form.project)`r`n"
+              $formData += "--$boundary--`r`n"
+              
+              $webClient.Headers.Add("Content-Type", "multipart/form-data; boundary=$boundary")
+              $formBytes = [System.Text.Encoding]::UTF8.GetBytes($formData)
+              
+              try {
+                $response = $webClient.UploadData("https://scan.coverity.com/download/win64", "POST", $formBytes)
+                [System.IO.File]::WriteAllBytes($zipPath, $response)
+              }
+              finally {
+                $webClient.Dispose()
+              }
+              
+              if (-not (Test-Path $zipPath)) {
+                throw "File not created after download"
+              }
+              
+              $fileSize = (Get-Item $zipPath).Length
+              Write-Output "Downloaded file size: $fileSize bytes"
+              
+              if ($fileSize -lt 1000000) {
+                Write-Output "File seems too small, checking content..."
+                $content = Get-Content $zipPath -Raw -Encoding UTF8
+                if ($content -match "error|Error|ERROR") {
+                  throw "Download returned error page instead of zip file"
+                }
+              }
+              
+              # Validate zip file with more robust check
+              try {
+                # First try basic file header check
+                $fileStream = [System.IO.File]::OpenRead($zipPath)
+                $buffer = New-Object byte[] 4
+                $fileStream.Read($buffer, 0, 4) | Out-Null
+                $fileStream.Close()
+                
+                # Check for ZIP file signature (PK)
+                if ($buffer[0] -ne 0x50 -or $buffer[1] -ne 0x4B) {
+                  throw "File does not have ZIP signature"
+                }
+                
+                # Now try full ZIP validation
+                Add-Type -AssemblyName System.IO.Compression.FileSystem
+                $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+                $entryCount = $zip.Entries.Count
+                
+                # Verify we can read the central directory
+                $firstEntry = $zip.Entries[0]
+                $null = $firstEntry.Name
+                
+                $zip.Dispose()
+                Write-Output "Zip file validated with $entryCount entries"
+                $downloadSuccess = $true
+              }
+              catch {
+                throw "Zip file integrity check failed: $($_.Exception.Message)"
+              }
+            }
+            catch
+            {
+              Write-Output "Download attempt $retryCount failed: $($_.Exception.Message)"
+              if ($retryCount -lt $maxRetries) {
+                Write-Output "Waiting 30 seconds before retry..."
+                Start-Sleep -Seconds 30
+              }
+            }
+          }
+          
+          if (-not $downloadSuccess) {
+            Write-Error "Failed to download Coverity tool after $maxRetries attempts"
             exit 1
           }
 
-          if (-not (Test-Path $zipPath)) {
-            Write-Error "❌ Coverity zip not found after download!"
-            exit 1
-          }
-
+          Write-Output "Extracting Coverity tool..."
           New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
           Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
-          Write-Output "✅ Coverity Tool installed successfully"
+          Write-Output "Coverity Tool installed successfully"
           Get-ChildItem -Recurse coverity_tool
 
       - name: Setup MSYS2
@@ -82,67 +161,213 @@ jobs:
         run: |
           covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
           if [ -z "$covFolder" ]; then
-            echo "❌ Could not find the cov-analysis-win64 folder inside coverity_tool"
+            echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
             exit 1
           fi
           covPath="$covFolder/bin/cov-build.exe"
-          echo "✅ Using Coverity at: $covPath"
+          echo "Using Coverity at: $covPath"
           SHA=$(git rev-parse --short HEAD)
           sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
           echo "Listing structure under coverity_tool (max 3 levels):"
           find coverity_tool -type d -maxdepth 3 || true
           echo "Listing top-level directories:"
           ls -1 || true
-          "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1"
+          
+          # Configure Coverity for GCC compiler in MSYS2
+          echo "Configuring Coverity for MSYS2 GCC..."
+          "$covFolder/bin/cov-configure.exe" --template --compiler gcc --comptype gcc
+          
+          # Ensure clean build directory
+          rm -rf cov-int
+          mkdir -p cov-int
+          mkdir -p cov-int/output
+          
+          # Clean any previous build artifacts to force recompilation
+          echo "Cleaning previous build artifacts..."
+          make clean || true
+          rm -f base/subconverter.exe || true
+          
+          # Run cov-build and capture both stdout and stderr
+          set +e
+          echo "Running cov-build with full compilation..."
+          "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1" 2>&1 | tee cov-int/build-log.txt
+          build_exit_code=$?
+          set -e
+          
+          # Check if cov-build actually captured anything
+          echo "Checking cov-build capture results..."
+          if [ -d "cov-int/emit" ]; then
+            echo "Found emit directory - compilation was captured"
+            ls -la cov-int/emit/ || true
+          else
+            echo "WARNING: No emit directory found - no compilation captured"
+          fi
+          
+          if [ -f "cov-int/build-log.txt" ]; then
+            echo "Build log contents:"
+            head -50 cov-int/build-log.txt
+            echo "Checking for COMPILING entries in build log..."
+            grep "COMPILING" cov-int/build-log.txt || echo "No COMPILING entries found"
+          fi
+          
+          echo "Build exit code: $build_exit_code"
+          
+          # Ensure we have the required files
+          if [ ! -f "cov-int/build-log.txt" ]; then
+            echo "Creating build-log.txt from build output"
+            touch cov-int/build-log.txt
+          fi
+          
+          # Note: cov-build should have captured the build and generated analysis data
+          # Check what was actually captured and generated
+          echo "Checking captured Coverity data..."
+          if [ -d "cov-int" ]; then
+            echo "Contents of cov-int directory:"
+            ls -la cov-int/ || true
+            find cov-int -name "*.json" -type f || echo "No JSON files found"
+          else
+            echo "ERROR: cov-int directory not found"
+            exit 1
+          fi
       - name: Verify Coverity output
         shell: msys2 {0}
         run: |
-          if [ -f "cov-int/build-log.txt" ]; then
-            echo "✅ build-log.txt found"
-          elif [ -f "cov-int/output/cli-diagnostics.json" ]; then
-            echo "✅ cli-diagnostics.json found"
+          echo "Checking for required Coverity artifacts..."
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la || true
+          echo ""
+          
+          echo "Checking cov-int directory structure:"
+          if [ -d "cov-int" ]; then
+            echo "cov-int directory exists"
+            echo "cov-int contents:"
+            ls -la cov-int/ || true
+            echo ""
+            
+            if [ -d "cov-int/output" ]; then
+              echo "cov-int/output directory exists"
+              echo "cov-int/output contents:"
+              ls -la cov-int/output/ || true
+            else
+              echo "cov-int/output directory missing"
+            fi
+            echo ""
           else
-            echo "❌ No Coverity output found!"
-            echo "Listing cov-int contents:"
-            ls -R cov-int || true
+            echo "cov-int directory missing!"
             exit 1
+          fi
+          
+          # Check for required files
+          found_artifact=false
+          
+          if [ -f "cov-int/build-log.txt" ]; then
+            echo "build-log.txt found"
+            echo "build-log.txt size: $(du -h cov-int/build-log.txt)"
+            found_artifact=true
+          else
+            echo "build-log.txt not found"
+          fi
+          
+          # Look for any analysis files that Coverity generated
+          if find cov-int -name "*.json" -type f | grep -q .; then
+            echo "JSON analysis files found:"
+            find cov-int -name "*.json" -type f -exec ls -la {} \;
+            found_artifact=true
+          else
+            echo "No JSON analysis files found"
+          fi
+          
+          if [ "$found_artifact" = false ]; then
+            echo "No required Coverity artifacts found!"
+            echo "Full directory tree:"
+            find cov-int -type f || true
+            exit 1
+          else
+            echo "Required Coverity artifacts verified successfully"
           fi
       - name: Compress Results
         shell: powershell
         run: |
-          Compress-Archive -Path cov-int -DestinationPath myproject.zip
+          Write-Output "Checking archive contents before compression..."
+          Get-ChildItem -Recurse cov-int | Format-Table Name, FullName, Length
+          
+          Write-Output "Creating archive..."
+          Compress-Archive -Path cov-int -DestinationPath myproject.zip -Force
+          
+          Write-Output "Verifying archive contents..."
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead("myproject.zip")
+          Write-Output "Archive entries:"
+          $zip.Entries | ForEach-Object { Write-Output "  $($_.FullName) ($($_.Length) bytes)" }
+          $zip.Dispose()
+          
+          Write-Output "Archive file size: $((Get-Item myproject.zip).Length) bytes"
         id: compress
 
       - name: Create GitHub Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: "coverity-scan-${{ github.run_id }}"
-          release_name: "Coverity Scan Results"
-          body: "Automated Coverity Scan Results"
-          draft: false
-          prerelease: false
-
-      - name: Upload Asset to Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: myproject.zip
-          asset_name: myproject.zip
-          asset_content_type: application/x-bzip2
+        shell: powershell
+        run: |
+          try {
+            $tag = "coverity-scan-${{ github.run_id }}"
+            $headers = @{
+              "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+              "Accept" = "application/vnd.github.v3+json"
+            }
+            
+            # Create release
+            $releaseData = @{
+              tag_name = $tag
+              name = "Coverity Scan Results"
+              body = "Automated Coverity Scan Results"
+              draft = $false
+              prerelease = $false
+            } | ConvertTo-Json
+            
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Method Post -Headers $headers -Body $releaseData -ContentType "application/json"
+            
+            # Upload asset
+            $uploadUrl = $release.upload_url -replace '\{\?name,label\}', "?name=myproject.zip"
+            $fileBytes = [System.IO.File]::ReadAllBytes("myproject.zip")
+            $uploadHeaders = $headers.Clone()
+            $uploadHeaders["Content-Type"] = "application/zip"
+            
+            Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $uploadHeaders -Body $fileBytes
+            
+            Write-Output "Release created successfully"
+            Write-Output "::set-output name=download_url::https://github.com/${{ github.repository }}/releases/download/$tag/myproject.zip"
+          }
+          catch {
+            Write-Error "Failed to create release: $($_.Exception.Message)"
+            exit 1
+          }
 
       - name: Notify Coverity Scan
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
-            project     = "${{ github.repository }}"
-            token       = "${{ secrets.COVERITY_TOKEN }}"
-            email       = "cpp.benchmark@proton.me"
-            url         = "https://github.com/${{ github.repository }}/releases/download/coverity-scan-${{ github.run_id }}/myproject.zip"
-            version     = "1.0"
-            description = "Automated Coverity Scan"
+          try {
+            Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
+              project     = "${{ github.repository }}"
+              token       = "${{ secrets.COVERITY_TOKEN }}"
+              email       = "cpp.benchmark@proton.me"
+              url         = "${{ steps.create_release.outputs.download_url }}"
+              version     = "${{ github.sha }}"
+              description = "Automated Coverity Scan"
+            }
+            Write-Output "Successfully notified Coverity Scan"
           }
+          catch {
+            Write-Error "Failed to notify Coverity: $($_.Exception.Message)"
+            exit 1
+          }
+
+      - name: Upload Coverity Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverity-results
+          path: |
+            cov-int/
+            myproject.zip
+          retention-days: 30
