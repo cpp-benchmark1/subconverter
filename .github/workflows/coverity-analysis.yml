@@ -173,16 +173,42 @@ jobs:
           echo "Listing top-level directories:"
           ls -1 || true
           
+          # Configure Coverity for GCC compiler in MSYS2
+          echo "Configuring Coverity for MSYS2 GCC..."
+          "$covFolder/bin/cov-configure.exe" --template --compiler gcc --comptype gcc
+          
           # Ensure clean build directory
           rm -rf cov-int
           mkdir -p cov-int
           mkdir -p cov-int/output
           
+          # Clean any previous build artifacts to force recompilation
+          echo "Cleaning previous build artifacts..."
+          make clean || true
+          rm -f base/subconverter.exe || true
+          
           # Run cov-build and capture both stdout and stderr
           set +e
+          echo "Running cov-build with full compilation..."
           "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1" 2>&1 | tee cov-int/build-log.txt
           build_exit_code=$?
           set -e
+          
+          # Check if cov-build actually captured anything
+          echo "Checking cov-build capture results..."
+          if [ -d "cov-int/emit" ]; then
+            echo "Found emit directory - compilation was captured"
+            ls -la cov-int/emit/ || true
+          else
+            echo "WARNING: No emit directory found - no compilation captured"
+          fi
+          
+          if [ -f "cov-int/build-log.txt" ]; then
+            echo "Build log contents:"
+            head -50 cov-int/build-log.txt
+            echo "Checking for COMPILING entries in build log..."
+            grep "COMPILING" cov-int/build-log.txt || echo "No COMPILING entries found"
+          fi
           
           echo "Build exit code: $build_exit_code"
           
