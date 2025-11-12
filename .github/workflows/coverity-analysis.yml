@@ -218,13 +218,30 @@ jobs:
             touch cov-int/build-log.txt
           fi
           
-          # Note: cov-build should have captured the build and generated analysis data
+          # Run Coverity analysis to generate cli-diagnostics.json
+          echo "Running Coverity analysis using main coverity command..."
+          if [ -f "$covFolder/bin/coverity.exe" ]; then
+            echo "Using coverity.exe for analysis"
+            "$covFolder/bin/coverity.exe" --help || true
+            echo "Attempting to run emit/analysis..."
+            "$covFolder/bin/coverity.exe" --dir cov-int emit --all --security --concurrency || true
+          else
+            echo "coverity.exe not found, trying cov-emit.exe directly"
+            "$covFolder/bin/cov-emit.exe" --dir cov-int || true
+          fi
+          
           # Check what was actually captured and generated
           echo "Checking captured Coverity data..."
           if [ -d "cov-int" ]; then
             echo "Contents of cov-int directory:"
             ls -la cov-int/ || true
-            find cov-int -name "*.json" -type f || echo "No JSON files found"
+            find cov-int -type f -name "*.json" || echo "No JSON files found"
+            
+            # Also check for emit directory structure
+            if [ -d "cov-int/emit" ]; then
+              echo "Emit directory contents:"
+              ls -la cov-int/emit/ || true
+            fi
           else
             echo "ERROR: cov-int directory not found"
             exit 1
@@ -269,9 +286,15 @@ jobs:
             echo "build-log.txt not found"
           fi
           
-          # Look for any analysis files that Coverity generated
-          if find cov-int -name "*.json" -type f | grep -q .; then
-            echo "JSON analysis files found:"
+          # Look for cli-diagnostics.json specifically or any analysis files
+          if [ -f "cov-int/output/cli-diagnostics.json" ]; then
+            echo "cli-diagnostics.json found"
+            echo "cli-diagnostics.json size: $(du -h cov-int/output/cli-diagnostics.json)"
+            echo "Content preview:"
+            head -20 cov-int/output/cli-diagnostics.json || true
+            found_artifact=true
+          elif find cov-int -name "*.json" -type f | grep -q .; then
+            echo "Other JSON analysis files found:"
             find cov-int -name "*.json" -type f -exec ls -la {} \;
             found_artifact=true
           else
