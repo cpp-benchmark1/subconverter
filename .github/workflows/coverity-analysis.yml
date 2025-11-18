@@ -78,8 +78,38 @@ jobs:
             {
               if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
               
-              # Use faster Invoke-WebRequest with optimized settings
-              $response = Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" -Method Post -Body $form -Headers $headers -OutFile $zipPath -PassThru -TimeoutSec 300
+              # Use HttpClient for large file streaming download
+              Add-Type -AssemblyName System.Net.Http
+              $httpClient = New-Object System.Net.Http.HttpClient
+              $httpClient.Timeout = [System.TimeSpan]::FromSeconds(300)
+              
+              try {
+                # Prepare form content
+                $formContent = New-Object System.Net.Http.MultipartFormDataContent
+                $tokenContent = New-Object System.Net.Http.StringContent($form.token)
+                $projectContent = New-Object System.Net.Http.StringContent($form.project)
+                $formContent.Add($tokenContent, "token")
+                $formContent.Add($projectContent, "project")
+                
+                # Add User-Agent header
+                $httpClient.DefaultRequestHeaders.Add("User-Agent", "GitHubActions-Coverity")
+                
+                # Download with streaming
+                Write-Output "Starting streaming download..."
+                $response = $httpClient.PostAsync("https://scan.coverity.com/download/win64", $formContent).Result
+                $response.EnsureSuccessStatusCode()
+                
+                $fileStream = [System.IO.File]::Create($zipPath)
+                try {
+                  $response.Content.CopyToAsync($fileStream).Wait()
+                }
+                finally {
+                  $fileStream.Close()
+                }
+              }
+              finally {
+                $httpClient.Dispose()
+              }
               
               if (-not (Test-Path $zipPath)) {
                 throw "File not created after download"
