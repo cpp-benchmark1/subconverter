@@ -47,9 +47,9 @@ jobs:
         shell: powershell
         run: |
           if ("${{ steps.cache-coverity.outputs.cache-hit }}" -eq "true") {
-            Write-Output "✓ Coverity tool found in cache - skipping download"
+            Write-Output "Coverity tool found in cache - skipping download"
           } else {
-            Write-Output "⚠ Coverity tool not in cache - will download"
+            Write-Output "Coverity tool not in cache - will download"
           }
 
       - name: Download and Install Coverity Tool
