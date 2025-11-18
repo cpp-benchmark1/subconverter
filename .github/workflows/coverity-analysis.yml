@@ -219,15 +219,24 @@ jobs:
           fi
           
           # Run Coverity analysis to generate cli-diagnostics.json
-          echo "Running Coverity analysis using main coverity command..."
-          if [ -f "$covFolder/bin/coverity.exe" ]; then
-            echo "Using coverity.exe for analysis"
-            "$covFolder/bin/coverity.exe" --help || true
-            echo "Attempting to run emit/analysis..."
-            "$covFolder/bin/coverity.exe" --dir cov-int emit --all --security --concurrency || true
+          echo "Running Coverity analysis to generate cli-diagnostics.json..."
+          
+          # Ensure output directory exists
+          mkdir -p cov-int/output
+          
+          if [ -f "$covFolder/bin/cov-analyze.exe" ]; then
+            echo "Running cov-analyze to generate cli-diagnostics.json"
+            "$covFolder/bin/cov-analyze.exe" --dir cov-int --all --security --concurrency --output-format json --json-output-dir cov-int/output
+            analyze_exit_code=$?
+            
+            echo "cov-analyze exit code: $analyze_exit_code"
+            if [ $analyze_exit_code -ne 0 ]; then
+              echo "WARNING: cov-analyze exited with non-zero code $analyze_exit_code"
+            fi
           else
-            echo "coverity.exe not found, trying cov-emit.exe directly"
-            "$covFolder/bin/cov-emit.exe" --dir cov-int || true
+            echo "ERROR: cov-analyze.exe not found in $covFolder/bin/"
+            ls -la "$covFolder/bin/" || true
+            exit 1
           fi
           
           # Check what was actually captured and generated
@@ -286,28 +295,36 @@ jobs:
             echo "build-log.txt not found"
           fi
           
-          # Look for cli-diagnostics.json specifically or any analysis files
+          # Check specifically for cli-diagnostics.json (REQUIRED)
           if [ -f "cov-int/output/cli-diagnostics.json" ]; then
-            echo "cli-diagnostics.json found"
+            echo "✓ cli-diagnostics.json found"
             echo "cli-diagnostics.json size: $(du -h cov-int/output/cli-diagnostics.json)"
             echo "Content preview:"
             head -20 cov-int/output/cli-diagnostics.json || true
             found_artifact=true
-          elif find cov-int -name "*.json" -type f | grep -q .; then
-            echo "Other JSON analysis files found:"
-            find cov-int -name "*.json" -type f -exec ls -la {} \;
-            found_artifact=true
           else
-            echo "No JSON analysis files found"
+            echo "✗ ERROR: cli-diagnostics.json not found!"
+            echo "This file is REQUIRED for Coverity Scan submission."
+            found_artifact=false
           fi
           
+          # List any other analysis files for debugging
+          if find cov-int -name "*.json" -type f | grep -q .; then
+            echo "Other JSON analysis files found:"
+            find cov-int -name "*.json" -type f -exec ls -la {} \;
+          else
+            echo "No other JSON analysis files found"
+          fi
+          
+          # FAIL if cli-diagnostics.json is missing
           if [ "$found_artifact" = false ]; then
-            echo "No required Coverity artifacts found!"
-            echo "Full directory tree:"
+            echo "PIPELINE FAILURE: cli-diagnostics.json was not generated!"
+            echo "The Coverity analysis did not produce the required diagnostics file."
+            echo "Full cov-int directory tree for debugging:"
             find cov-int -type f || true
             exit 1
           else
-            echo "Required Coverity artifacts verified successfully"
+            echo "✓ Required cli-diagnostics.json verified successfully"
           fi
       - name: Compress Results
         shell: powershell
