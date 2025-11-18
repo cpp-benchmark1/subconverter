@@ -276,19 +276,48 @@ jobs:
           # Ensure output directory exists
           mkdir -p cov-int/output
           
+          # List available Coverity commands for debugging
+          echo "Available Coverity commands:"
+          ls -la "$covFolder/bin/" | grep -E "(cov-|coverity)" || true
+          
+          # Try different possible analysis commands
+          analyze_cmd=""
           if [ -f "$covFolder/bin/cov-analyze.exe" ]; then
-            echo "Running cov-analyze to generate cli-diagnostics.json"
-            "$covFolder/bin/cov-analyze.exe" --dir cov-int --all --security --concurrency --output-format json --json-output-dir cov-int/output
-            analyze_exit_code=$?
-            
-            echo "cov-analyze exit code: $analyze_exit_code"
-            if [ $analyze_exit_code -ne 0 ]; then
-              echo "WARNING: cov-analyze exited with non-zero code $analyze_exit_code"
-            fi
+            analyze_cmd="$covFolder/bin/cov-analyze.exe"
+          elif [ -f "$covFolder/bin/cov-analyze" ]; then
+            analyze_cmd="$covFolder/bin/cov-analyze"  
+          elif [ -f "$covFolder/bin/cov-analyze.bat" ]; then
+            analyze_cmd="$covFolder/bin/cov-analyze.bat"
+          elif [ -f "$covFolder/bin/coverity.exe" ]; then
+            analyze_cmd="$covFolder/bin/coverity.exe"
+            echo "Using coverity.exe as fallback for analysis"
           else
-            echo "ERROR: cov-analyze.exe not found in $covFolder/bin/"
+            echo "ERROR: No suitable Coverity analysis command found in $covFolder/bin/"
+            echo "Searching for any analysis-related files:"
+            find "$covFolder" -name "*analyze*" -o -name "*coverity*" | head -10 || true
+            echo "All files in bin directory:"
             ls -la "$covFolder/bin/" || true
             exit 1
+          fi
+          
+          echo "Using analysis command: $analyze_cmd"
+          
+          # Run analysis with appropriate parameters based on the command
+          if [[ "$analyze_cmd" == *"coverity.exe"* ]]; then
+            # Use coverity.exe syntax for Windows
+            echo "Running analysis with coverity.exe..."
+            "$analyze_cmd" --dir cov-int --all --security --concurrency
+            analyze_exit_code=$?
+          else
+            # Use cov-analyze syntax
+            echo "Running analysis with cov-analyze..."
+            "$analyze_cmd" --dir cov-int --all --security --concurrency --output-format json --json-output-dir cov-int/output
+            analyze_exit_code=$?
+          fi
+          
+          echo "Analysis exit code: $analyze_exit_code"
+          if [ $analyze_exit_code -ne 0 ]; then
+            echo "WARNING: Analysis exited with non-zero code $analyze_exit_code"
           fi
           
           # Check what was actually captured and generated
