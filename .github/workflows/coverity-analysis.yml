@@ -32,7 +32,28 @@ jobs:
         with:
           submodules: 'recursive'
 
+      - name: Cache Coverity Tool
+        id: cache-coverity
+        uses: actions/cache@v3
+        with:
+          path: |
+            coverity_tool.zip
+            coverity_tool/
+          key: coverity-tool-${{ runner.os }}-v1
+          restore-keys: |
+            coverity-tool-${{ runner.os }}-
+
+      - name: Check Cache Status
+        shell: powershell
+        run: |
+          if ("${{ steps.cache-coverity.outputs.cache-hit }}" -eq "true") {
+            Write-Output "✓ Coverity tool found in cache - skipping download"
+          } else {
+            Write-Output "⚠ Coverity tool not in cache - will download"
+          }
+
       - name: Download and Install Coverity Tool
+        if: steps.cache-coverity.outputs.cache-hit != 'true'
         shell: powershell
         run: |
           $zipPath = "coverity_tool.zip"
@@ -57,40 +78,21 @@ jobs:
             {
               if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
               
-              # Download with resume capability and better error handling
-              $webClient = New-Object System.Net.WebClient
-              $webClient.Headers.Add("User-Agent", "GitHubActions-Coverity")
-              
-              # Prepare form data manually for WebClient
-              $boundary = [System.Guid]::NewGuid().ToString()
-              $formData = "--$boundary`r`n"
-              $formData += "Content-Disposition: form-data; name=`"token`"`r`n`r`n$($form.token)`r`n"
-              $formData += "--$boundary`r`n"
-              $formData += "Content-Disposition: form-data; name=`"project`"`r`n`r`n$($form.project)`r`n"
-              $formData += "--$boundary--`r`n"
-              
-              $webClient.Headers.Add("Content-Type", "multipart/form-data; boundary=$boundary")
-              $formBytes = [System.Text.Encoding]::UTF8.GetBytes($formData)
-              
-              try {
-                $response = $webClient.UploadData("https://scan.coverity.com/download/win64", "POST", $formBytes)
-                [System.IO.File]::WriteAllBytes($zipPath, $response)
-              }
-              finally {
-                $webClient.Dispose()
-              }
+              # Use faster Invoke-WebRequest with optimized settings
+              $response = Invoke-WebRequest -Uri "https://scan.coverity.com/download/win64" -Method Post -Body $form -Headers $headers -OutFile $zipPath -PassThru -TimeoutSec 300
               
               if (-not (Test-Path $zipPath)) {
                 throw "File not created after download"
               }
               
               $fileSize = (Get-Item $zipPath).Length
-              Write-Output "Downloaded file size: $fileSize bytes"
+              $fileSizeMB = [math]::Round($fileSize / 1MB, 2)
+              Write-Output "Downloaded file size: $fileSizeMB MB ($fileSize bytes)"
               
-              if ($fileSize -lt 1000000) {
-                Write-Output "File seems too small, checking content..."
-                $content = Get-Content $zipPath -Raw -Encoding UTF8
-                if ($content -match "error|Error|ERROR") {
+              if ($fileSize -lt 10000000) {  # Less than 10MB is suspicious
+                Write-Output "File seems too small for Coverity tool, checking content..."
+                $content = Get-Content $zipPath -Raw -Encoding UTF8 -TotalCount 1000
+                if ($content -match "error|Error|ERROR|html|HTML") {
                   throw "Download returned error page instead of zip file"
                 }
               }
@@ -129,8 +131,8 @@ jobs:
             {
               Write-Output "Download attempt $retryCount failed: $($_.Exception.Message)"
               if ($retryCount -lt $maxRetries) {
-                Write-Output "Waiting 30 seconds before retry..."
-                Start-Sleep -Seconds 30
+                Write-Output "Waiting 10 seconds before retry..."
+                Start-Sleep -Seconds 10
               }
             }
           }
@@ -145,8 +147,28 @@ jobs:
           Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
           $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
           New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
-          Write-Output "Coverity Tool installed successfully"
+          Write-Output "Coverity Tool downloaded and extracted successfully"
           Get-ChildItem -Recurse coverity_tool
+
+      - name: Setup Coverity from Cache
+        if: steps.cache-coverity.outputs.cache-hit == 'true'
+        shell: powershell
+        run: |
+          Write-Output "Using cached Coverity tool"
+          if (Test-Path "coverity_tool") {
+            Write-Output "Coverity tool directory found in cache"
+            Get-ChildItem -Recurse coverity_tool | Select-Object -First 10
+          } else {
+            Write-Output "Extracting cached Coverity zip..."
+            if (Test-Path "coverity_tool.zip") {
+              New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
+              Expand-Archive "coverity_tool.zip" -DestinationPath "coverity_tool" -Force
+              Write-Output "Coverity tool extracted from cache successfully"
+            } else {
+              Write-Error "Neither coverity_tool directory nor coverity_tool.zip found in cache"
+              exit 1
+            }
+          }
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
