@@ -34,6 +34,7 @@ TOTAL_UNITS=""
 if [ -f "cov-int/build-log.txt" ]; then
     BUILD_CMD=$(grep "cov-build command:" cov-int/build-log.txt 2>/dev/null | head -1 | sed 's/.*cov-build command: //' | sed 's/ *$//' | tr -d '\r' || echo "")
     COVERITY_VERSION=$(grep "cov-build.*2024" cov-int/build-log.txt 2>/dev/null | head -1 | sed 's/.*cov-build //' | sed 's/ (.*//' | tr -d '\r' || echo "")
+    COVERITY_BUILD_ID=$(grep "build.*[a-f0-9]\{10\}" cov-int/build-log.txt 2>/dev/null | head -1 | sed 's/.*(build //' | sed 's/).*//' | tr -d '\r' || echo "")
     PLATFORM=$(grep "Platform info:" cov-int/build-log.txt 2>/dev/null | head -1 | sed 's/.*Platform info: //' | tr -d '\r' || echo "")
     HOST=$(grep "hostname :" cov-int/build-log.txt 2>/dev/null | head -1 | sed 's/.*hostname : //' | tr -d '\r' || echo "")
     EMITTED=$(grep "Emitted.*successfully" cov-int/build-log.txt 2>/dev/null | tail -1 | sed 's/.*Emitted //' | sed 's/ .*//' | tr -d '\r' || echo "")
@@ -48,21 +49,68 @@ if [ -f "cov-int/BUILD.metrics.xml" ]; then
     BUILD_TIME_SECS=$(grep -A1 "<name>time</name>" cov-int/BUILD.metrics.xml 2>/dev/null | grep "<value>" | sed 's/<[^>]*>//g' | sed 's/^ *//' | tr -d '\r' || echo "")
 fi
 
-# Calculate total units (use default values if empty)
-SUCCESSES=${SUCCESSES:-0}
-FAILURES=${FAILURES:-0}
-EMITTED=${EMITTED:-0}
-PERCENTAGE=${PERCENTAGE:-0}
-RECOVERABLE=${RECOVERABLE:-0}
+# Validate that all required data was extracted
+echo "Validating extracted data..."
 
-# Ensure numeric values
-if ! [[ "$SUCCESSES" =~ ^[0-9]+$ ]]; then SUCCESSES=0; fi
-if ! [[ "$FAILURES" =~ ^[0-9]+$ ]]; then FAILURES=0; fi
-if ! [[ "$EMITTED" =~ ^[0-9]+$ ]]; then EMITTED=0; fi
-if ! [[ "$PERCENTAGE" =~ ^[0-9]+$ ]]; then PERCENTAGE=0; fi
-if ! [[ "$RECOVERABLE" =~ ^[0-9]+$ ]]; then RECOVERABLE=0; fi
+if [ -z "$BUILD_CMD" ]; then
+    echo "ERROR: Failed to extract build command from build-log.txt"
+    exit 1
+fi
 
+if [ -z "$COVERITY_VERSION" ]; then
+    echo "ERROR: Failed to extract Coverity version from build-log.txt"
+    exit 1
+fi
+
+if [ -z "$COVERITY_BUILD_ID" ]; then
+    echo "ERROR: Failed to extract Coverity build ID from build-log.txt"
+    exit 1
+fi
+
+if [ -z "$PLATFORM" ]; then
+    echo "ERROR: Failed to extract platform info from build-log.txt"
+    exit 1
+fi
+
+if [ -z "$HOST" ]; then
+    echo "ERROR: Failed to extract hostname from build-log.txt"
+    exit 1
+fi
+
+if [ -z "$EMITTED" ] || ! [[ "$EMITTED" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Failed to extract valid emitted units count from build-log.txt"
+    exit 1
+fi
+
+if [ -z "$PERCENTAGE" ] || ! [[ "$PERCENTAGE" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Failed to extract valid percentage from build-log.txt"
+    exit 1
+fi
+
+if [ -z "$SUCCESSES" ] || ! [[ "$SUCCESSES" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Failed to extract valid successes count from BUILD.metrics.xml"
+    exit 1
+fi
+
+if [ -z "$FAILURES" ] || ! [[ "$FAILURES" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Failed to extract valid failures count from BUILD.metrics.xml"
+    exit 1
+fi
+
+if [ -z "$RECOVERABLE" ] || ! [[ "$RECOVERABLE" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Failed to extract valid recoverable errors count from BUILD.metrics.xml"
+    exit 1
+fi
+
+if [ -z "$BUILD_TIME_SECS" ] || ! [[ "$BUILD_TIME_SECS" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Failed to extract valid build time from BUILD.metrics.xml"
+    exit 1
+fi
+
+# Calculate total units
 TOTAL_UNITS=$((SUCCESSES + FAILURES))
+
+echo "✓ All required data extracted successfully"
 
 # Get current timestamp
 CURRENT_TIME=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
@@ -121,26 +169,28 @@ cat > cov-int/output/cli-diagnostics.json << EOF
     "summary": {
       "buildCommand": "${BUILD_CMD_ESCAPED}",
       "cov-build": {
-        "version": "${COVERITY_VERSION:-unknown}",
+        "version": "${COVERITY_VERSION}",
+        "build": "${COVERITY_BUILD_ID}",
         "exitCode": 0,
         "platform": "${PLATFORM_ESCAPED}",
-        "host": "${HOST:-unknown}"
+        "host": "${HOST}"
       },
       "compilation": {
-        "totalUnits": ${TOTAL_UNITS:-0},
-        "emittedUnits": ${EMITTED:-0},
-        "emittedPercentage": ${PERCENTAGE:-0},
-        "failures": ${FAILURES:-0},
-        "recoverableErrors": ${RECOVERABLE:-0}$(if [ -n "$BUILD_TIME_SECS" ]; then echo ","; echo "        \"buildTimeSeconds\": $BUILD_TIME_SECS"; fi)
+        "totalUnits": ${TOTAL_UNITS},
+        "emittedUnits": ${EMITTED},
+        "emittedPercentage": ${PERCENTAGE},
+        "failures": ${FAILURES},
+        "recoverableErrors": ${RECOVERABLE},
+        "buildTimeSeconds": ${BUILD_TIME_SECS}
       }
     },
 $COMPILATION_UNITS
     "metrics": {$(if [ -n "$BUILD_TIME" ]; then echo "
       \"buildTime\": \"$BUILD_TIME\","; fi)
-      "emitSuccesses": ${SUCCESSES:-0},
-      "emitFailures": ${FAILURES:-0},
-      "recoverableErrors": ${RECOVERABLE:-0},
-      "coverityVersion": "${COVERITY_VERSION:-unknown} (build 3c60fc625b p-2024.12-push-36)",
+      "emitSuccesses": ${SUCCESSES},
+      "emitFailures": ${FAILURES},
+      "recoverableErrors": ${RECOVERABLE},
+      "coverityVersion": "${COVERITY_VERSION} (build ${COVERITY_BUILD_ID})",
       "intermediatePath": "D:/a/subconverter/subconverter/cov-int",
       "outputPath": "D:/a/subconverter/subconverter/cov-int/output"
     }
@@ -149,8 +199,8 @@ $COMPILATION_UNITS
     "timestamp": "$CURRENT_TIME",
     "status": "completed",
     "readyForAnalysis": true,
-    "capturedUnits": ${EMITTED:-0},
-    "message": "${EMITTED:-0} C/C++ compilation units (${PERCENTAGE:-0}%) are ready for analysis"
+    "capturedUnits": ${EMITTED},
+    "message": "${EMITTED} C/C++ compilation units (${PERCENTAGE}%) are ready for analysis"
   }
 }
 EOF
