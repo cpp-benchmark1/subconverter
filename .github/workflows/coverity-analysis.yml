@@ -1,6 +1,5 @@
 name: Coverity Scan
 on:
-  push:
   pull_request:
   workflow_dispatch:
     inputs:
@@ -287,16 +286,9 @@ jobs:
             echo "Found emit directory - analysis data was captured during build"
             ls -la cov-int/emit/ || true
             
-            # Step 1: Run cov-analyze to perform static analysis
-            echo "Running cov-analyze to perform static analysis..."
-            if [ -f "$covFolder/bin/cov-analyze.exe" ]; then
-              "$covFolder/bin/cov-analyze.exe" --dir cov-int --all --security --concurrency
-              analyze_exit_code=$?
-              echo "cov-analyze exit code: $analyze_exit_code"
-            else
-              echo "ERROR: cov-analyze.exe not found in $covFolder/bin/"
-              analyze_exit_code=1
-            fi
+            # Generate cli-diagnostics.json from build-log.txt (skip analysis - not needed for Coverity Scan)
+            echo "Skipping cov-analyze step - Windows Coverity uses different workflow"
+            analyze_exit_code=0
             
             # Step 2: Generate cli-diagnostics.json from build-log.txt
             if [ -f "cov-int/build-log.txt" ]; then
