@@ -315,61 +315,52 @@ jobs:
               RECOVERABLE=$(grep "recoverable-errors" cov-int/BUILD.metrics.xml | grep -o '<value>[0-9]*</value>' | sed 's/<[^>]*>//g')
               TIMESTAMP=$(tail -5 cov-int/build-log.txt | grep -o '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T[0-9]\{2\}:[0-9]\{2\}:[0-9]\{2\}\.[0-9]*Z' | tail -1)
               
-              # Create cli-diagnostics.json using printf to avoid YAML heredoc issues
-              printf '{
-  "format_version": "v7",
-  "issues": [],
-  "buildResults": {
-    "summary": {
-      "buildCommand": "%s",
-      "cov-build": {
-        "version": "%s",
-        "exitCode": 0,
-        "platform": "%s",
-        "host": "%s"
+              # Create cli-diagnostics.json using Python for proper JSON generation
+              python3 -c "
+import json
+import sys
+
+data = {
+  'format_version': 'v7',
+  'issues': [],
+  'buildResults': {
+    'summary': {
+      'buildCommand': '${BUILD_CMD:-bash.exe -lc ./scripts/build.windows.release.sh VERBOSE=1}',
+      'cov-build': {
+        'version': '${COVERITY_VERSION:-2024.12.1}',
+        'exitCode': 0,
+        'platform': '${PLATFORM:-Windows Server}',
+        'host': '${HOST:-runnervmmu5y5}'
       },
-      "compilation": {
-        "emittedUnits": %s,
-        "emittedPercentage": %s,
-        "failures": %s,
-        "successes": %s,
-        "recoverableErrors": %s
+      'compilation': {
+        'emittedUnits': ${EMITTED:-237},
+        'emittedPercentage': ${PERCENTAGE:-86},
+        'failures': ${FAILURES:-37},
+        'successes': ${SUCCESSES:-237},
+        'recoverableErrors': ${RECOVERABLE:-217}
       }
     },
-    "metrics": {
-      "emitSuccesses": %s,
-      "emitFailures": %s,
-      "recoverableErrors": %s,
-      "coverityVersion": "%s",
-      "intermediatePath": "cov-int",
-      "outputPath": "cov-int/output"
+    'metrics': {
+      'emitSuccesses': ${SUCCESSES:-237},
+      'emitFailures': ${FAILURES:-37},
+      'recoverableErrors': ${RECOVERABLE:-217},
+      'coverityVersion': '${COVERITY_VERSION:-2024.12.1}',
+      'intermediatePath': 'cov-int',
+      'outputPath': 'cov-int/output'
     }
   },
-  "analysis": {
-    "timestamp": "%s",
-    "status": "completed",
-    "readyForAnalysis": true,
-    "capturedUnits": %s,
-    "message": "%s C/C++ compilation units (%s%%) are ready for analysis"
+  'analysis': {
+    'timestamp': '${TIMESTAMP:-$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)}',
+    'status': 'completed',
+    'readyForAnalysis': True,
+    'capturedUnits': ${EMITTED:-237},
+    'message': '${EMITTED:-237} C/C++ compilation units (${PERCENTAGE:-86}%) are ready for analysis'
   }
-}' \
-                "${BUILD_CMD:-bash.exe -lc ./scripts/build.windows.release.sh VERBOSE=1}" \
-                "${COVERITY_VERSION:-2024.12.1}" \
-                "${PLATFORM:-Windows Server}" \
-                "${HOST:-runnervmmu5y5}" \
-                "${EMITTED:-237}" \
-                "${PERCENTAGE:-86}" \
-                "${FAILURES:-37}" \
-                "${SUCCESSES:-237}" \
-                "${RECOVERABLE:-217}" \
-                "${SUCCESSES:-237}" \
-                "${FAILURES:-37}" \
-                "${RECOVERABLE:-217}" \
-                "${COVERITY_VERSION:-2024.12.1}" \
-                "${TIMESTAMP:-$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)}" \
-                "${EMITTED:-237}" \
-                "${EMITTED:-237}" \
-                "${PERCENTAGE:-86}" > cov-int/output/cli-diagnostics.json
+}
+
+with open('cov-int/output/cli-diagnostics.json', 'w') as f:
+    json.dump(data, f, indent=2)
+"
               
               echo "cli-diagnostics.json generated successfully"
               echo "File size: $(du -h cov-int/output/cli-diagnostics.json)"
