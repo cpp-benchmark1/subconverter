@@ -304,29 +304,40 @@ jobs:
           
           # Run analysis with appropriate parameters based on the command
           if [[ "$analyze_cmd" == *"cov-manage-emit.exe"* ]]; then
-            # Use cov-manage-emit.exe syntax for Windows
+            # Use cov-manage-emit.exe with basic parameters
             echo "Running analysis with cov-manage-emit.exe..."
-            "$analyze_cmd" --dir cov-int --dataflow --concurrency --security
+            echo "First, checking help for available options..."
+            "$analyze_cmd" --help || true
+            echo "Running with basic parameters..."
+            "$analyze_cmd" --dir cov-int
             analyze_exit_code=$?
             
             # Check for analysis output files
             echo "Checking for analysis output files..."
             find cov-int -name "*.json" -o -name "*.xml" -o -name "*.txt" | head -20 || true
             
-            # Try to generate JSON format explicitly
+            # Try to generate JSON format using cov-format-errors if available
             if [ -f "$covFolder/bin/cov-format-errors.exe" ]; then
-              echo "Attempting to format results as JSON..."
+              echo "Attempting to format results as JSON using cov-format-errors..."
+              mkdir -p cov-int/output
               "$covFolder/bin/cov-format-errors.exe" --dir cov-int --json-output-dir cov-int/output || true
+            fi
+            
+            # Alternative: Try using cov-translate to generate output
+            if [ -f "$covFolder/bin/cov-translate.exe" ] && [ $analyze_exit_code -eq 0 ]; then
+              echo "Attempting to generate output using cov-translate..."
+              mkdir -p cov-int/output
+              "$covFolder/bin/cov-translate.exe" --dir cov-int --output-dir cov-int/output || true
             fi
           elif [[ "$analyze_cmd" == *"cov-analyze"* ]]; then
             # Use cov-analyze syntax
             echo "Running analysis with cov-analyze..."
-            "$analyze_cmd" --dir cov-int --dataflow --security --concurrency --output-format json --json-output-dir cov-int/output
+            "$analyze_cmd" --dir cov-int --all --security --concurrency --output-format json --json-output-dir cov-int/output
             analyze_exit_code=$?
           else
             # Fallback for other commands
             echo "Running analysis with $analyze_cmd..."
-            "$analyze_cmd" --dir cov-int --dataflow --security --concurrency
+            "$analyze_cmd" --dir cov-int
             analyze_exit_code=$?
           fi
           
