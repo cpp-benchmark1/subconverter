@@ -282,9 +282,9 @@ jobs:
           
           # Try different possible analysis commands
           analyze_cmd=""
-          if [ -f "$covFolder/bin/cov-emit.exe" ]; then
-            analyze_cmd="$covFolder/bin/cov-emit.exe"
-            echo "Using cov-emit.exe for analysis"
+          if [ -f "$covFolder/bin/cov-manage-emit.exe" ]; then
+            analyze_cmd="$covFolder/bin/cov-manage-emit.exe"
+            echo "Using cov-manage-emit.exe for analysis"
           elif [ -f "$covFolder/bin/cov-analyze.exe" ]; then
             analyze_cmd="$covFolder/bin/cov-analyze.exe"
           elif [ -f "$covFolder/bin/cov-analyze" ]; then
@@ -293,8 +293,8 @@ jobs:
             analyze_cmd="$covFolder/bin/cov-analyze.bat"
           else
             echo "ERROR: No suitable Coverity analysis command found in $covFolder/bin/"
-            echo "Searching for emit or analysis commands:"
-            find "$covFolder" -name "*emit*" -o -name "*analyze*" | head -10 || true
+            echo "Searching for manage-emit or analysis commands:"
+            find "$covFolder" -name "*manage*" -o -name "*emit*" -o -name "*analyze*" | head -10 || true
             echo "All files in bin directory:"
             ls -la "$covFolder/bin/" || true
             exit 1
@@ -303,17 +303,17 @@ jobs:
           echo "Using analysis command: $analyze_cmd"
           
           # Run analysis with appropriate parameters based on the command
-          if [[ "$analyze_cmd" == *"cov-emit.exe"* ]]; then
-            # Use cov-emit.exe syntax for Windows
-            echo "Running analysis with cov-emit.exe..."
-            "$analyze_cmd" --dir cov-int --all --security --concurrency
+          if [[ "$analyze_cmd" == *"cov-manage-emit.exe"* ]]; then
+            # Use cov-manage-emit.exe syntax for Windows
+            echo "Running analysis with cov-manage-emit.exe..."
+            "$analyze_cmd" --dir cov-int --dataflow --concurrency --security
             analyze_exit_code=$?
             
-            # cov-emit generates different output files, check for various formats
+            # Check for analysis output files
             echo "Checking for analysis output files..."
             find cov-int -name "*.json" -o -name "*.xml" -o -name "*.txt" | head -20 || true
             
-            # Try to generate JSON format explicitly if available
+            # Try to generate JSON format explicitly
             if [ -f "$covFolder/bin/cov-format-errors.exe" ]; then
               echo "Attempting to format results as JSON..."
               "$covFolder/bin/cov-format-errors.exe" --dir cov-int --json-output-dir cov-int/output || true
@@ -321,12 +321,12 @@ jobs:
           elif [[ "$analyze_cmd" == *"cov-analyze"* ]]; then
             # Use cov-analyze syntax
             echo "Running analysis with cov-analyze..."
-            "$analyze_cmd" --dir cov-int --all --security --concurrency --output-format json --json-output-dir cov-int/output
+            "$analyze_cmd" --dir cov-int --dataflow --security --concurrency --output-format json --json-output-dir cov-int/output
             analyze_exit_code=$?
           else
             # Fallback for other commands
             echo "Running analysis with $analyze_cmd..."
-            "$analyze_cmd" --dir cov-int --all --security --concurrency
+            "$analyze_cmd" --dir cov-int --dataflow --security --concurrency
             analyze_exit_code=$?
           fi
           
