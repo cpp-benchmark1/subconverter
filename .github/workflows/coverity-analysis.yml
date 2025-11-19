@@ -360,7 +360,7 @@ jobs:
             echo "build-log.txt not found"
           fi
           
-          # Check for cli-diagnostics.json (preferred) or other analysis files
+          # Check specifically for cli-diagnostics.json (REQUIRED)
           if [ -f "cov-int/output/cli-diagnostics.json" ]; then
             echo "✓ cli-diagnostics.json found"
             echo "cli-diagnostics.json size: $(du -h cov-int/output/cli-diagnostics.json)"
@@ -368,36 +368,35 @@ jobs:
             head -20 cov-int/output/cli-diagnostics.json || true
             found_artifact=true
           else
-            echo "⚠ cli-diagnostics.json not found, checking for other analysis files..."
+            echo "✗ ERROR: cli-diagnostics.json not found!"
+            echo "This file is REQUIRED for Coverity Scan submission."
+            found_artifact=false
             
-            # Look for any analysis files that Coverity might have generated
+            # Show what files were found for debugging (but don't accept them as valid)
+            echo "Checking for other analysis files (for debugging only)..."
             if find cov-int -name "*.json" -type f | grep -q .; then
-              echo "JSON analysis files found:"
+              echo "Other JSON files found (but cli-diagnostics.json is required):"
               find cov-int -name "*.json" -type f -exec ls -la {} \;
-              found_artifact=true
             elif find cov-int -name "*.xml" -type f | grep -q .; then
-              echo "XML analysis files found:"
+              echo "XML analysis files found (but cli-diagnostics.json is required):"
               find cov-int -name "*.xml" -type f -exec ls -la {} \;
-              found_artifact=true
             elif find cov-int -name "*emit*" -type f | grep -q .; then
-              echo "Emit files found:"
+              echo "Emit files found (but cli-diagnostics.json is required):"
               find cov-int -name "*emit*" -type f -exec ls -la {} \;
-              found_artifact=true
             else
               echo "No analysis files found"
-              found_artifact=false
             fi
           fi
           
-          # FAIL if no analysis artifacts are found
+          # FAIL if cli-diagnostics.json is missing
           if [ "$found_artifact" = false ]; then
-            echo "PIPELINE FAILURE: No Coverity analysis files were generated!"
-            echo "The Coverity analysis did not produce any output files."
+            echo "PIPELINE FAILURE: cli-diagnostics.json was not generated!"
+            echo "The Coverity analysis did not produce the required cli-diagnostics.json file."
             echo "Full cov-int directory tree for debugging:"
             find cov-int -type f || true
             exit 1
           else
-            echo "✓ Coverity analysis artifacts verified successfully"
+            echo "✓ Required cli-diagnostics.json verified successfully"
           fi
       - name: Compress Results
         shell: powershell
