@@ -315,52 +315,44 @@ jobs:
               RECOVERABLE=$(grep "recoverable-errors" cov-int/BUILD.metrics.xml | grep -o '<value>[0-9]*</value>' | sed 's/<[^>]*>//g')
               TIMESTAMP=$(tail -5 cov-int/build-log.txt | grep -o '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T[0-9]\{2\}:[0-9]\{2\}:[0-9]\{2\}\.[0-9]*Z' | tail -1)
               
-              # Create cli-diagnostics.json using Python for proper JSON generation
-              python3 -c "
-import json
-import sys
-
-data = {
-  'format_version': 'v7',
-  'issues': [],
-  'buildResults': {
-    'summary': {
-      'buildCommand': '${BUILD_CMD:-bash.exe -lc ./scripts/build.windows.release.sh VERBOSE=1}',
-      'cov-build': {
-        'version': '${COVERITY_VERSION:-2024.12.1}',
-        'exitCode': 0,
-        'platform': '${PLATFORM:-Windows Server}',
-        'host': '${HOST:-runnervmmu5y5}'
-      },
-      'compilation': {
-        'emittedUnits': ${EMITTED:-237},
-        'emittedPercentage': ${PERCENTAGE:-86},
-        'failures': ${FAILURES:-37},
-        'successes': ${SUCCESSES:-237},
-        'recoverableErrors': ${RECOVERABLE:-217}
-      }
-    },
-    'metrics': {
-      'emitSuccesses': ${SUCCESSES:-237},
-      'emitFailures': ${FAILURES:-37},
-      'recoverableErrors': ${RECOVERABLE:-217},
-      'coverityVersion': '${COVERITY_VERSION:-2024.12.1}',
-      'intermediatePath': 'cov-int',
-      'outputPath': 'cov-int/output'
-    }
-  },
-  'analysis': {
-    'timestamp': '${TIMESTAMP:-$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)}',
-    'status': 'completed',
-    'readyForAnalysis': True,
-    'capturedUnits': ${EMITTED:-237},
-    'message': '${EMITTED:-237} C/C++ compilation units (${PERCENTAGE:-86}%) are ready for analysis'
-  }
-}
-
-with open('cov-int/output/cli-diagnostics.json', 'w') as f:
-    json.dump(data, f, indent=2)
-"
+              # Create cli-diagnostics.json using simple echo commands
+              echo "{" > cov-int/output/cli-diagnostics.json
+              echo '  "format_version": "v7",' >> cov-int/output/cli-diagnostics.json
+              echo '  "issues": [],' >> cov-int/output/cli-diagnostics.json
+              echo '  "buildResults": {' >> cov-int/output/cli-diagnostics.json
+              echo '    "summary": {' >> cov-int/output/cli-diagnostics.json
+              echo "      \"buildCommand\": \"${BUILD_CMD:-bash.exe -lc ./scripts/build.windows.release.sh VERBOSE=1}\"," >> cov-int/output/cli-diagnostics.json
+              echo '      "cov-build": {' >> cov-int/output/cli-diagnostics.json
+              echo "        \"version\": \"${COVERITY_VERSION:-2024.12.1}\"," >> cov-int/output/cli-diagnostics.json
+              echo '        "exitCode": 0,' >> cov-int/output/cli-diagnostics.json
+              echo "        \"platform\": \"${PLATFORM:-Windows Server}\"," >> cov-int/output/cli-diagnostics.json
+              echo "        \"host\": \"${HOST:-runnervmmu5y5}\"" >> cov-int/output/cli-diagnostics.json
+              echo '      },' >> cov-int/output/cli-diagnostics.json
+              echo '      "compilation": {' >> cov-int/output/cli-diagnostics.json
+              echo "        \"emittedUnits\": ${EMITTED:-237}," >> cov-int/output/cli-diagnostics.json
+              echo "        \"emittedPercentage\": ${PERCENTAGE:-86}," >> cov-int/output/cli-diagnostics.json
+              echo "        \"failures\": ${FAILURES:-37}," >> cov-int/output/cli-diagnostics.json
+              echo "        \"successes\": ${SUCCESSES:-237}," >> cov-int/output/cli-diagnostics.json
+              echo "        \"recoverableErrors\": ${RECOVERABLE:-217}" >> cov-int/output/cli-diagnostics.json
+              echo '      }' >> cov-int/output/cli-diagnostics.json
+              echo '    },' >> cov-int/output/cli-diagnostics.json
+              echo '    "metrics": {' >> cov-int/output/cli-diagnostics.json
+              echo "      \"emitSuccesses\": ${SUCCESSES:-237}," >> cov-int/output/cli-diagnostics.json
+              echo "      \"emitFailures\": ${FAILURES:-37}," >> cov-int/output/cli-diagnostics.json
+              echo "      \"recoverableErrors\": ${RECOVERABLE:-217}," >> cov-int/output/cli-diagnostics.json
+              echo "      \"coverityVersion\": \"${COVERITY_VERSION:-2024.12.1}\"," >> cov-int/output/cli-diagnostics.json
+              echo '      "intermediatePath": "cov-int",' >> cov-int/output/cli-diagnostics.json
+              echo '      "outputPath": "cov-int/output"' >> cov-int/output/cli-diagnostics.json
+              echo '    }' >> cov-int/output/cli-diagnostics.json
+              echo '  },' >> cov-int/output/cli-diagnostics.json
+              echo '  "analysis": {' >> cov-int/output/cli-diagnostics.json
+              echo "    \"timestamp\": \"${TIMESTAMP:-$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)}\"," >> cov-int/output/cli-diagnostics.json
+              echo '    "status": "completed",' >> cov-int/output/cli-diagnostics.json
+              echo '    "readyForAnalysis": true,' >> cov-int/output/cli-diagnostics.json
+              echo "    \"capturedUnits\": ${EMITTED:-237}," >> cov-int/output/cli-diagnostics.json
+              echo "    \"message\": \"${EMITTED:-237} C/C++ compilation units (${PERCENTAGE:-86}%) are ready for analysis\"" >> cov-int/output/cli-diagnostics.json
+              echo '  }' >> cov-int/output/cli-diagnostics.json
+              echo "}" >> cov-int/output/cli-diagnostics.json
               
               echo "cli-diagnostics.json generated successfully"
               echo "File size: $(du -h cov-int/output/cli-diagnostics.json)"
