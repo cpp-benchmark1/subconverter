@@ -21,82 +21,298 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v1.3
+    - name: Cache Coverity Tool
+      id: cache-coverity
+      uses: actions/cache@v3
+      with:
+        path: |
+          coverity_tool.zip
+          coverity_tool/
+        key: coverity-tool-${{ runner.os }}-v1
+        restore-keys: |
+          coverity-tool-${{ runner.os }}-
 
+    - name: Check Cache Status
+      shell: powershell
+      run: |
+        if ("${{ steps.cache-coverity.outputs.cache-hit }}" -eq "true") {
+          Write-Output "Coverity tool found in cache - skipping download"
+        } else {
+          Write-Output "Coverity tool not in cache - will download"
+        }
+
+    - name: Download and Install Coverity Tool
+      if: steps.cache-coverity.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        $zipPath = "coverity_tool.zip"
+        $form = @{
+          token = "${{ secrets.COVERITY_TOKEN }}"
+          project = "${{ github.repository }}"
+        }
+        $headers = @{
+          "User-Agent" = "GitHubActions-Coverity"
+        }
+
+        $maxRetries = 3
+        $retryCount = 0
+        $downloadSuccess = $false
+
+        while ($retryCount -lt $maxRetries -and -not $downloadSuccess)
+        {
+          $retryCount++
+          Write-Output "Downloading Coverity tool (attempt $retryCount/$maxRetries)..."
+          
+          try
+          {
+            if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+            
+            # Use HttpClient for large file streaming download
+            Add-Type -AssemblyName System.Net.Http
+            $httpClient = New-Object System.Net.Http.HttpClient
+            $httpClient.Timeout = [System.TimeSpan]::FromSeconds(300)
+            
+            try {
+              # Prepare form content
+              $formContent = New-Object System.Net.Http.MultipartFormDataContent
+              $tokenContent = New-Object System.Net.Http.StringContent($form.token)
+              $projectContent = New-Object System.Net.Http.StringContent($form.project)
+              $formContent.Add($tokenContent, "token")
+              $formContent.Add($projectContent, "project")
+              
+              # Add User-Agent header
+              $httpClient.DefaultRequestHeaders.Add("User-Agent", "GitHubActions-Coverity")
+              
+              # Download with streaming
+              Write-Output "Starting streaming download..."
+              $response = $httpClient.PostAsync("https://scan.coverity.com/download/win64", $formContent).Result
+              $response.EnsureSuccessStatusCode()
+              
+              $fileStream = [System.IO.File]::Create($zipPath)
+              try {
+                $response.Content.CopyToAsync($fileStream).Wait()
+              }
+              finally {
+                $fileStream.Close()
+              }
+            }
+            finally {
+              $httpClient.Dispose()
+            }
+            
+            if (-not (Test-Path $zipPath)) {
+              throw "File not created after download"
+            }
+            
+            $fileSize = (Get-Item $zipPath).Length
+            $fileSizeMB = [math]::Round($fileSize / 1MB, 2)
+            Write-Output "Downloaded file size: $fileSizeMB MB ($fileSize bytes)"
+            
+            if ($fileSize -lt 10000000) {  # Less than 10MB is suspicious
+              Write-Output "File seems too small for Coverity tool, checking content..."
+              $content = Get-Content $zipPath -Raw -Encoding UTF8 -TotalCount 1000
+              if ($content -match "error|Error|ERROR|html|HTML") {
+                throw "Download returned error page instead of zip file"
+              }
+            }
+            
+            # Validate zip file with more robust check
+            try {
+              # First try basic file header check
+              $fileStream = [System.IO.File]::OpenRead($zipPath)
+              $buffer = New-Object byte[] 4
+              $fileStream.Read($buffer, 0, 4) | Out-Null
+              $fileStream.Close()
+              
+              # Check for ZIP file signature (PK)
+              if ($buffer[0] -ne 0x50 -or $buffer[1] -ne 0x4B) {
+                throw "File does not have ZIP signature"
+              }
+              
+              # Now try full ZIP validation
+              Add-Type -AssemblyName System.IO.Compression.FileSystem
+              $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+              $entryCount = $zip.Entries.Count
+              
+              # Verify we can read the central directory
+              $firstEntry = $zip.Entries[0]
+              $null = $firstEntry.Name
+              
+              $zip.Dispose()
+              Write-Output "Zip file validated with $entryCount entries"
+              $downloadSuccess = $true
+            }
+            catch {
+              throw "Zip file integrity check failed: $($_.Exception.Message)"
+            }
+          }
+          catch
+          {
+            Write-Output "Download attempt $retryCount failed: $($_.Exception.Message)"
+            if ($retryCount -lt $maxRetries) {
+              Write-Output "Waiting 10 seconds before retry..."
+              Start-Sleep -Seconds 10
+            }
+          }
+        }
+        
+        if (-not $downloadSuccess) {
+          Write-Error "Failed to download Coverity tool after $maxRetries attempts"
+          exit 1
+        }
+
+        Write-Output "Extracting Coverity tool..."
+        New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
+        Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
+        $Env:PATH = "$PWD\coverity_tool\bin;$Env:PATH"
+        New-Item -ItemType Directory -Path "cov-int" -Force | Out-Null
+        Write-Output "Coverity Tool downloaded and extracted successfully"
+        Get-ChildItem -Recurse coverity_tool
+
+    - name: Setup Coverity from Cache
+      if: steps.cache-coverity.outputs.cache-hit == 'true'
+      shell: powershell
+      run: |
+        Write-Output "Using cached Coverity tool"
+        if (Test-Path "coverity_tool") {
+          Write-Output "Coverity tool directory found in cache"
+          Get-ChildItem -Recurse coverity_tool | Select-Object -First 10
+        } else {
+          Write-Output "Extracting cached Coverity zip..."
+          if (Test-Path "coverity_tool.zip") {
+            New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
+            Expand-Archive "coverity_tool.zip" -DestinationPath "coverity_tool" -Force
+            Write-Output "Coverity tool extracted from cache successfully"
+          } else {
+            Write-Error "Neither coverity_tool directory nor coverity_tool.zip found in cache"
+            exit 1
+          }
+        }
     - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
         update: true
-        install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-curl mingw-w64-x86_64-rapidjson mingw-w64-x86_64-yaml-cpp mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2
+        install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2 patch
         path-type: inherit
 
-    - name: Download Coverity Build Tool
-      shell: powershell
-      run: |
-        $form = @{
-          token = "${{ secrets.COVERITY_TOKEN }}"
-          project = "${{ github.repository }}"
-        }
-        Invoke-WebRequest -Uri "https://scan.coverity.com/download/cxx/win64" -Method POST -Body $form -OutFile "coverity_tool.zip"
-        Expand-Archive -Path "coverity_tool.zip" -DestinationPath "coverity-tools"
-
-    - name: Configure CMake
-      shell: msys2 {0}
-      run: |
-        cmake -B build -S . \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DBUILD_STATIC_LIBRARY=OFF
 
     - name: Build with Coverity
       shell: msys2 {0}
       run: |
-        export PATH="$PWD/coverity-tools/bin:$PATH"
-        cd build
-        cov-build --dir cov-int cmake --build . --config Release
+        covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
+        if [ -z "$covFolder" ]; then
+          echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
+          exit 1
+        fi
+        export PATH="$covFolder/bin:$PATH"
+        covPath="$covFolder/bin/cov-build.exe"
+        echo "Using Coverity at: $covPath"
 
-    - name: Submit to Coverity Scan
+        # Configure Coverity for GCC compiler in MSYS2
+        echo "Configuring Coverity for MSYS2 GCC..."
+        "$covFolder/bin/cov-configure.exe" --template --compiler gcc --comptype gcc
+        
+        # Ensure clean build directory
+        # rm -rf cov-int
+        # mkdir -p cov-int
+        # mkdir -p cov-int/output
+
+        # # Clean any previous build artifacts to force recompilation
+        # echo "Cleaning previous build artifacts..."
+        # make clean || true
+        # rm -f base/subconverter.exe || true
+        # Run cov-build and capture both stdout and stderr
+        set +e
+        echo "Running cov-build with full compilation..."
+        "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh VERBOSE=1" 2>&1 | tee cov-int/build-log.txt
+        build_exit_code=$?
+        set -e
+
+    - name: Verify and Compress Results
       shell: powershell
       run: |
-        cd build
-        Compress-Archive -Path "cov-int" -DestinationPath "myproject.zip"
-        $form = @{
-          token = "${{ secrets.COVERITY_TOKEN }}"
-          email = "cpp.benchmark@proton.me"
-          version = "${{ github.ref_name }}"
-          description = "GitHub Actions build"
-        }
-        $fileBytes = [System.IO.File]::ReadAllBytes("myproject.zip")
-        $boundary = [System.Guid]::NewGuid().ToString()
-        $LF = "`r`n"
-        $bodyLines = @(
-          "--$boundary",
-          "Content-Disposition: form-data; name=`"token`"$LF",
-          $form.token,
-          "--$boundary",
-          "Content-Disposition: form-data; name=`"email`"$LF", 
-          $form.email,
-          "--$boundary",
-          "Content-Disposition: form-data; name=`"version`"$LF",
-          $form.version,
-          "--$boundary", 
-          "Content-Disposition: form-data; name=`"description`"$LF",
-          $form.description,
-          "--$boundary",
-          "Content-Disposition: form-data; name=`"file`"; filename=`"myproject.zip`"",
-          "Content-Type: application/zip$LF"
-        )
-        $bodyString = $bodyLines -join $LF
-        $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyString)
-        $endBytes = [System.Text.Encoding]::UTF8.GetBytes("$LF--$boundary--$LF")
-        $fullBody = $bodyBytes + $fileBytes + $endBytes
-        Invoke-RestMethod -Uri "https://scan.coverity.com/builds?project=${{ github.repository }}" -Method Post -Body $fullBody -ContentType "multipart/form-data; boundary=$boundary"
+          Write-Output "Verifying required files..."
+          
+          $requiredFiles = @(
+            "cov-int/build-log.txt",
+            "cov-int/BUILD.metrics.xml",
+            "cov-int/output/cli-diagnostics.json"
+          )
+          
+          foreach ($file in $requiredFiles) {
+            if (Test-Path $file) {
+              $size = (Get-Item $file).Length
+              Write-Output "✓ $file exists ($([math]::Round($size/1KB, 2)) KB)"
+            } else {
+              Write-Error "✗ ERROR: $file is missing"
+              exit 1
+            }
+          }
+          
+          Write-Output "Creating archive..."
+          Compress-Archive -Path cov-int -DestinationPath myproject.zip -Force
+          $archiveSize = (Get-Item myproject.zip).Length
+          Write-Output "✓ Archive created: $([math]::Round($archiveSize/1MB, 2)) MB"
 
-    - name: Upload Coverity Results
+    - name: Create Release and Submit to Coverity
+      shell: powershell
+      run: |
+        try {
+          # Create GitHub Release
+          $tag = "coverity-scan-${{ github.run_id }}"
+          $headers = @{
+            "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+            "Accept" = "application/vnd.github.v3+json"
+          }
+          
+          $releaseData = @{
+            tag_name = $tag
+            name = "Coverity Scan Results"
+            body = "Automated Coverity Scan Results"
+            draft = $false
+            prerelease = $false
+          } | ConvertTo-Json
+          
+          Write-Output "Creating GitHub release..."
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Method Post -Headers $headers -Body $releaseData -ContentType "application/json"
+          
+          # Upload archive
+          $uploadUrl = $release.upload_url -replace '\{\?name,label\}', "?name=myproject.zip"
+          $fileBytes = [System.IO.File]::ReadAllBytes("myproject.zip")
+          $uploadHeaders = $headers.Clone()
+          $uploadHeaders["Content-Type"] = "application/zip"
+          
+          Write-Output "Uploading archive..."
+          Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $uploadHeaders -Body $fileBytes
+          
+          $downloadUrl = "https://github.com/${{ github.repository }}/releases/download/$tag/myproject.zip"
+          Write-Output "✓ Archive uploaded: $downloadUrl"
+          
+          # Notify Coverity Scan
+          Write-Output "Notifying Coverity Scan..."
+          Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
+            project     = "${{ github.repository }}"
+            token       = "${{ secrets.COVERITY_TOKEN }}"
+            email       = "cpp.benchmark@proton.me"
+            url         = $downloadUrl
+            version     = "${{ github.sha }}"
+            description = "Automated Coverity Scan"
+          }
+          
+          Write-Output "✅ Coverity Scan submitted successfully!"
+        }
+        catch {
+          Write-Error "❌ Failed: $($_.Exception.Message)"
+          exit 1
+        }
+
+    - name: Upload Artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: coverity-results
-        path: build/cov-int/
-        retention-days: 7
+        path: |
+          cov-int/
+          myproject.zip
+        retention-days: 1
