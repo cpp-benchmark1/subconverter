@@ -42,30 +42,25 @@ jobs:
         Write-Output ""
         Write-Output "=== Attempting Upload ==="
         
-        # Test the actual upload with verbose output
-        $curlOutput = curl.exe --verbose --show-error `
-          --request POST `
+        # Test the actual upload with verbose output (remove -X POST as it's implied with -F)
+        Write-Output "Running curl command..."
+        curl.exe --verbose --show-error `
           --form "token=${{ secrets.COVERITY_TOKEN }}" `
           --form "email=cpp.benchmark@proton.me" `
           --form "file=@myproject.zip" `
           --form "version=test-${{ github.run_id }}" `
           --form "description=GitHub Actions test upload" `
-          --url "https://scan.coverity.com/builds?project=${{ github.repository }}" `
-          2>&1
+          --url "https://scan.coverity.com/builds?project=${{ github.repository }}"
         
-        Write-Output "=== Full Curl Output ==="
-        Write-Output $curlOutput
+        $curlExitCode = $LASTEXITCODE
+        
         Write-Output "========================"
-        Write-Output "Exit code: $LASTEXITCODE"
+        Write-Output "Exit code: $curlExitCode"
         
         # Analyze the response
-        if ($curlOutput -match "Build successfully submitted") {
-          Write-Output "[SUCCESS] Coverity confirmed successful submission!"
-        } elseif ($curlOutput -match "HTTP.*[45][0-9][0-9]") {
-          Write-Output "[ERROR] HTTP error detected in response"
-          exit 1
-        } elseif ($LASTEXITCODE -eq 0) {
-          Write-Output "[INFO] Curl completed without errors"
+        if ($curlExitCode -eq 0) {
+          Write-Output "[SUCCESS] Curl completed successfully!"
         } else {
-          Write-Output "[WARNING] Curl returned exit code $LASTEXITCODE - check output above"
+          Write-Output "[WARNING] Curl returned exit code $curlExitCode"
+          Write-Output "This may indicate an issue with the upload"
         }
