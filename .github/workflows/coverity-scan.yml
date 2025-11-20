@@ -12,7 +12,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       security-events: write
-      contents: read
+      contents: write
       actions: read
 
     steps:
@@ -276,50 +276,52 @@ jobs:
           $archiveMB = [math]::Round($archiveSize/1MB, 2)
           Write-Output "[OK] Archive created: $archiveMB MB"
 
-    - name: Create Release and Submit to Coverity
+    - name: Submit to Coverity Scan
       shell: powershell
       run: |
         try {
-          # Create GitHub Release
-          $tag = "coverity-scan-${{ github.run_id }}"
+          Write-Output "Submitting to Coverity Scan via direct upload..."
+          
+          # Read file as bytes for multipart form submission
+          $zipBytes = [System.IO.File]::ReadAllBytes("myproject.zip")
+          $boundary = [System.Guid]::NewGuid().ToString()
+          $LF = "`r`n"
+          
+          # Build multipart form data manually
+          $form = @{
+            token = "${{ secrets.COVERITY_TOKEN }}"
+            email = "cpp.benchmark@proton.me"
+            version = "${{ github.sha }}"
+            description = "Automated Coverity Scan from GitHub Actions"
+            project = "${{ github.repository }}"
+          }
+          
+          $bodyLines = @()
+          foreach ($key in $form.Keys) {
+            $bodyLines += "--$boundary"
+            $bodyLines += "Content-Disposition: form-data; name=`"$key`""
+            $bodyLines += ""
+            $bodyLines += $form[$key]
+          }
+          
+          # Add file part
+          $bodyLines += "--$boundary"
+          $bodyLines += "Content-Disposition: form-data; name=`"file`"; filename=`"myproject.zip`""
+          $bodyLines += "Content-Type: application/zip"
+          $bodyLines += ""
+          
+          $bodyString = ($bodyLines -join $LF) + $LF
+          $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyString)
+          $endBytes = [System.Text.Encoding]::UTF8.GetBytes("$LF--$boundary--$LF")
+          
+          $fullBody = $bodyBytes + $zipBytes + $endBytes
+          
           $headers = @{
-            "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
-            "Accept" = "application/vnd.github.v3+json"
+            "Content-Type" = "multipart/form-data; boundary=$boundary"
           }
           
-          $releaseData = @{
-            tag_name = $tag
-            name = "Coverity Scan Results"
-            body = "Automated Coverity Scan Results"
-            draft = $false
-            prerelease = $false
-          } | ConvertTo-Json
-          
-          Write-Output "Creating GitHub release..."
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Method Post -Headers $headers -Body $releaseData -ContentType "application/json"
-          
-          # Upload archive
-          $uploadUrl = $release.upload_url -replace '\{\?name,label\}', "?name=myproject.zip"
-          $fileBytes = [System.IO.File]::ReadAllBytes("myproject.zip")
-          $uploadHeaders = $headers.Clone()
-          $uploadHeaders["Content-Type"] = "application/zip"
-          
-          Write-Output "Uploading archive..."
-          Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $uploadHeaders -Body $fileBytes
-          
-          $downloadUrl = "https://github.com/${{ github.repository }}/releases/download/$tag/myproject.zip"
-          Write-Output "[OK] Archive uploaded: $downloadUrl"
-          
-          # Notify Coverity Scan
-          Write-Output "Notifying Coverity Scan..."
-          Invoke-WebRequest -Uri "https://scan.coverity.com/builds" -Method Post -Body @{
-            project     = "${{ github.repository }}"
-            token       = "${{ secrets.COVERITY_TOKEN }}"
-            email       = "cpp.benchmark@proton.me"
-            url         = $downloadUrl
-            version     = "${{ github.sha }}"
-            description = "Automated Coverity Scan"
-          }
+          Write-Output "Uploading to Coverity Scan..."
+          Invoke-RestMethod -Uri "https://scan.coverity.com/builds?project=${{ github.repository }}" -Method Post -Body $fullBody -Headers $headers
           
           Write-Output "[SUCCESS] Coverity Scan submitted successfully!"
         }
