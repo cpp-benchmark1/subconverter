@@ -282,19 +282,14 @@ jobs:
         try {
           Write-Output "Submitting to Coverity Scan via curl..."
           
-          # Use curl for reliable multipart form submission
-          $curlArgs = @(
-            "-X", "POST"
-            "-F", "token=${{ secrets.COVERITY_TOKEN }}"
-            "-F", "email=cpp.benchmark@proton.me"
-            "-F", "file=@myproject.zip"
-            "-F", "version=${{ github.sha }}"
-            "-F", "description=Automated Coverity Scan from GitHub Actions"
-            "https://scan.coverity.com/builds?project=${{ github.repository }}"
-          )
-          
           Write-Output "Uploading to Coverity Scan..."
-          $result = & curl @curlArgs
+          $result = curl.exe -X POST `
+            -F "token=${{ secrets.COVERITY_TOKEN }}" `
+            -F "email=cpp.benchmark@proton.me" `
+            -F "file=@myproject.zip" `
+            -F "version=${{ github.sha }}" `
+            -F "description=Automated Coverity Scan from GitHub Actions" `
+            "https://scan.coverity.com/builds?project=${{ github.repository }}"
           
           if ($LASTEXITCODE -eq 0) {
             Write-Output "[SUCCESS] Coverity Scan submitted successfully!"
