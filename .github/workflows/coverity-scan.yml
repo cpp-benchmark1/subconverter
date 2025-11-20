@@ -230,23 +230,21 @@ jobs:
         set -e
 
     - name: Generate CLI Diagnostics
-      shell: msys2 {0}
+      shell: powershell
       run: |
-        echo "=== CLI Diagnostics Generation ==="
-        echo "Making script executable..."
-        chmod +x ./scripts/generate-cli-diagnostics.sh
+        Write-Output "=== CLI Diagnostics Generation ==="
+        Write-Output "Running Python CLI diagnostics generation script..."
         
-        echo "Running CLI diagnostics generation script..."
-        ./scripts/generate-cli-diagnostics.sh
+        python ./scripts/generate-cli-diagnostics.py
         
-        echo "Checking if cli-diagnostics.json was created..."
-        if [ -f "cov-int/output/cli-diagnostics.json" ]; then
-          echo "[OK] cli-diagnostics.json generated successfully"
-          ls -la cov-int/output/cli-diagnostics.json
-        else
-          echo "[ERROR] cli-diagnostics.json was not generated"
+        Write-Output "Checking if cli-diagnostics.json was created..."
+        if (Test-Path "cov-int/output/cli-diagnostics.json") {
+          $fileSize = (Get-Item "cov-int/output/cli-diagnostics.json").Length
+          Write-Output "[OK] cli-diagnostics.json generated successfully ($([math]::Round($fileSize/1KB, 2)) KB)"
+        } else {
+          Write-Output "[ERROR] cli-diagnostics.json was not generated"
           exit 1
-        fi
+        }
 
     - name: Verify and Compress Results
       shell: powershell
