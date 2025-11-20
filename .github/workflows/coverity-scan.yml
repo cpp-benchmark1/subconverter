@@ -276,54 +276,32 @@ jobs:
           $archiveMB = [math]::Round($archiveSize/1MB, 2)
           Write-Output "[OK] Archive created: $archiveMB MB"
 
-    - name: Submit to Coverity Scan
+    - name: Submit to Coverity Scan  
       shell: powershell
       run: |
         try {
-          Write-Output "Submitting to Coverity Scan via direct upload..."
+          Write-Output "Submitting to Coverity Scan via curl..."
           
-          # Read file as bytes for multipart form submission
-          $zipBytes = [System.IO.File]::ReadAllBytes("myproject.zip")
-          $boundary = [System.Guid]::NewGuid().ToString()
-          $LF = "`r`n"
-          
-          # Build multipart form data manually
-          $form = @{
-            token = "${{ secrets.COVERITY_TOKEN }}"
-            email = "cpp.benchmark@proton.me"
-            version = "${{ github.sha }}"
-            description = "Automated Coverity Scan from GitHub Actions"
-            project = "${{ github.repository }}"
-          }
-          
-          $bodyLines = @()
-          foreach ($key in $form.Keys) {
-            $bodyLines += "--$boundary"
-            $bodyLines += "Content-Disposition: form-data; name=`"$key`""
-            $bodyLines += ""
-            $bodyLines += $form[$key]
-          }
-          
-          # Add file part
-          $bodyLines += "--$boundary"
-          $bodyLines += "Content-Disposition: form-data; name=`"file`"; filename=`"myproject.zip`""
-          $bodyLines += "Content-Type: application/zip"
-          $bodyLines += ""
-          
-          $bodyString = ($bodyLines -join $LF) + $LF
-          $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyString)
-          $endBytes = [System.Text.Encoding]::UTF8.GetBytes("$LF--$boundary--$LF")
-          
-          $fullBody = $bodyBytes + $zipBytes + $endBytes
-          
-          $headers = @{
-            "Content-Type" = "multipart/form-data; boundary=$boundary"
-          }
+          # Use curl for reliable multipart form submission
+          $curlArgs = @(
+            "-X", "POST"
+            "-F", "token=${{ secrets.COVERITY_TOKEN }}"
+            "-F", "email=cpp.benchmark@proton.me"
+            "-F", "file=@myproject.zip"
+            "-F", "version=${{ github.sha }}"
+            "-F", "description=Automated Coverity Scan from GitHub Actions"
+            "https://scan.coverity.com/builds?project=${{ github.repository }}"
+          )
           
           Write-Output "Uploading to Coverity Scan..."
-          Invoke-RestMethod -Uri "https://scan.coverity.com/builds?project=${{ github.repository }}" -Method Post -Body $fullBody -Headers $headers
+          $result = & curl @curlArgs
           
-          Write-Output "[SUCCESS] Coverity Scan submitted successfully!"
+          if ($LASTEXITCODE -eq 0) {
+            Write-Output "[SUCCESS] Coverity Scan submitted successfully!"
+            Write-Output "Response: $result"
+          } else {
+            throw "curl failed with exit code $LASTEXITCODE"
+          }
         }
         catch {
           Write-Error "[FAILED] $($_.Exception.Message)"
