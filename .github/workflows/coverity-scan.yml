@@ -229,6 +229,25 @@ jobs:
         build_exit_code=$?
         set -e
 
+    - name: Generate CLI Diagnostics
+      shell: msys2 {0}
+      run: |
+        echo "=== CLI Diagnostics Generation ==="
+        echo "Making script executable..."
+        chmod +x ./scripts/generate-cli-diagnostics.sh
+        
+        echo "Running CLI diagnostics generation script..."
+        ./scripts/generate-cli-diagnostics.sh
+        
+        echo "Checking if cli-diagnostics.json was created..."
+        if [ -f "cov-int/output/cli-diagnostics.json" ]; then
+          echo "[OK] cli-diagnostics.json generated successfully"
+          ls -la cov-int/output/cli-diagnostics.json
+        else
+          echo "[ERROR] cli-diagnostics.json was not generated"
+          exit 1
+        fi
+
     - name: Verify and Compress Results
       shell: powershell
       run: |
