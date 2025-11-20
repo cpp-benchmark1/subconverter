@@ -1,0 +1,70 @@
+name: Test Coverity Upload
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-upload:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Test Coverity Upload
+      shell: powershell
+      run: |
+        Write-Output "=== Testing Coverity Upload ==="
+        
+        # Check if file exists
+        if (Test-Path "myproject.zip") {
+          $fileSize = (Get-Item "myproject.zip").Length
+          Write-Output "Archive size: $([math]::Round($fileSize/1MB, 2)) MB"
+          
+          # Verify it's a valid zip
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          try {
+            $zip = [System.IO.Compression.ZipFile]::OpenRead("myproject.zip")
+            Write-Output "Archive is valid with $($zip.Entries.Count) entries"
+            $zip.Dispose()
+          } catch {
+            Write-Output "ERROR: Archive validation failed: $($_.Exception.Message)"
+            exit 1
+          }
+        } else {
+          Write-Output "ERROR: myproject.zip not found!"
+          exit 1
+        }
+        
+        Write-Output ""
+        Write-Output "=== Attempting Upload ==="
+        
+        # Test the actual upload with verbose output
+        $curlOutput = curl.exe --verbose --show-error `
+          --request POST `
+          --form "token=${{ secrets.COVERITY_TOKEN }}" `
+          --form "email=cpp.benchmark@proton.me" `
+          --form "file=@myproject.zip" `
+          --form "version=test-${{ github.run_id }}" `
+          --form "description=GitHub Actions test upload" `
+          --url "https://scan.coverity.com/builds?project=${{ github.repository }}" `
+          2>&1
+        
+        Write-Output "=== Full Curl Output ==="
+        Write-Output $curlOutput
+        Write-Output "========================"
+        Write-Output "Exit code: $LASTEXITCODE"
+        
+        # Analyze the response
+        if ($curlOutput -match "Build successfully submitted") {
+          Write-Output "[SUCCESS] Coverity confirmed successful submission!"
+        } elseif ($curlOutput -match "HTTP.*[45][0-9][0-9]") {
+          Write-Output "[ERROR] HTTP error detected in response"
+          exit 1
+        } elseif ($LASTEXITCODE -eq 0) {
+          Write-Output "[INFO] Curl completed without errors"
+        } else {
+          Write-Output "[WARNING] Curl returned exit code $LASTEXITCODE - check output above"
+        }
