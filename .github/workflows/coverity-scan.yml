@@ -1,0 +1,107 @@
+name: Coverity Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  coverity-scan:
+    runs-on: windows-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.3
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+        vcpkgGitCommitId: 'latest'
+
+    - name: Install dependencies with vcpkg
+      shell: cmd
+      run: |
+        vcpkg install curl rapidjson yaml-cpp pcre2 libxml2 --triplet x64-windows
+
+    - name: Download Coverity Build Tool
+      shell: powershell
+      run: |
+        $form = @{
+          token = "${{ secrets.COVERITY_TOKEN }}"
+          project = "${{ github.repository }}"
+        }
+        Invoke-WebRequest -Uri "https://scan.coverity.com/download/cxx/win64" -Method POST -Body $form -OutFile "coverity_tool.zip"
+        Expand-Archive -Path "coverity_tool.zip" -DestinationPath "coverity-tools"
+
+    - name: Configure CMake
+      shell: cmd
+      run: |
+        cmake -B build -S . ^
+          -DCMAKE_BUILD_TYPE=Release ^
+          -DBUILD_STATIC_LIBRARY=OFF ^
+          -DCMAKE_TOOLCHAIN_FILE=%GITHUB_WORKSPACE%\vcpkg\scripts\buildsystems\vcpkg.cmake ^
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+
+    - name: Build with Coverity
+      shell: cmd
+      run: |
+        set PATH=%CD%\coverity-tools\bin;%PATH%
+        cd build
+        cov-build --dir cov-int cmake --build . --config Release
+
+    - name: Submit to Coverity Scan
+      shell: powershell
+      run: |
+        cd build
+        Compress-Archive -Path "cov-int" -DestinationPath "myproject.zip"
+        $form = @{
+          token = "${{ secrets.COVERITY_TOKEN }}"
+          email = "cpp.benchmark@proton.me"
+          version = "${{ github.ref_name }}"
+          description = "GitHub Actions build"
+        }
+        $fileBytes = [System.IO.File]::ReadAllBytes("myproject.zip")
+        $boundary = [System.Guid]::NewGuid().ToString()
+        $LF = "`r`n"
+        $bodyLines = @(
+          "--$boundary",
+          "Content-Disposition: form-data; name=`"token`"$LF",
+          $form.token,
+          "--$boundary",
+          "Content-Disposition: form-data; name=`"email`"$LF", 
+          $form.email,
+          "--$boundary",
+          "Content-Disposition: form-data; name=`"version`"$LF",
+          $form.version,
+          "--$boundary", 
+          "Content-Disposition: form-data; name=`"description`"$LF",
+          $form.description,
+          "--$boundary",
+          "Content-Disposition: form-data; name=`"file`"; filename=`"myproject.zip`"",
+          "Content-Type: application/zip$LF"
+        )
+        $bodyString = $bodyLines -join $LF
+        $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyString)
+        $endBytes = [System.Text.Encoding]::UTF8.GetBytes("$LF--$boundary--$LF")
+        $fullBody = $bodyBytes + $fileBytes + $endBytes
+        Invoke-RestMethod -Uri "https://scan.coverity.com/builds?project=${{ github.repository }}" -Method Post -Body $fullBody -ContentType "multipart/form-data; boundary=$boundary"
+
+    - name: Upload Coverity Results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverity-results
+        path: build/cov-int/
+        retention-days: 7
