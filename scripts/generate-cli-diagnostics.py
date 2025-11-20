@@ -168,7 +168,7 @@ def generate_cli_diagnostics():
     with open(output_file, 'w') as f:
         json.dump(cli_diagnostics, f, indent=2)
     
-    print(f"✓ Generated {output_file}")
+    print(f"[OK] Generated {output_file}")
     print(f"  - Total compilation units: {total_units}")
     print(f"  - Emitted units: {metrics['emitSuccesses']}")
     print(f"  - File size: {output_file.stat().st_size} bytes")
