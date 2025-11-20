@@ -24,16 +24,13 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v1.3
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
       with:
-        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-        vcpkgGitCommitId: 'latest'
-
-    - name: Install dependencies with vcpkg
-      shell: cmd
-      run: |
-        vcpkg install curl rapidjson yaml-cpp pcre2 libxml2 --triplet x64-windows
+        msystem: MINGW64
+        update: true
+        install: base-devel git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-curl mingw-w64-x86_64-rapidjson mingw-w64-x86_64-yaml-cpp mingw-w64-x86_64-pcre2 mingw-w64-x86_64-libxml2
+        path-type: inherit
 
     - name: Download Coverity Build Tool
       shell: powershell
@@ -46,18 +43,16 @@ jobs:
         Expand-Archive -Path "coverity_tool.zip" -DestinationPath "coverity-tools"
 
     - name: Configure CMake
-      shell: cmd
+      shell: msys2 {0}
       run: |
-        cmake -B build -S . ^
-          -DCMAKE_BUILD_TYPE=Release ^
-          -DBUILD_STATIC_LIBRARY=OFF ^
-          -DCMAKE_TOOLCHAIN_FILE=%GITHUB_WORKSPACE%\vcpkg\scripts\buildsystems\vcpkg.cmake ^
-          -DVCPKG_TARGET_TRIPLET=x64-windows
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_STATIC_LIBRARY=OFF
 
     - name: Build with Coverity
-      shell: cmd
+      shell: msys2 {0}
       run: |
-        set PATH=%CD%\coverity-tools\bin;%PATH%
+        export PATH="$PWD/coverity-tools/bin:$PATH"
         cd build
         cov-build --dir cov-int cmake --build . --config Release
 
