@@ -243,9 +243,10 @@ jobs:
           foreach ($file in $requiredFiles) {
             if (Test-Path $file) {
               $size = (Get-Item $file).Length
-              Write-Output "✓ $file exists ($([math]::Round($size/1KB, 2)) KB)"
+              $sizeKB = [math]::Round($size/1KB, 2)
+              Write-Output "[OK] $file exists ($sizeKB KB)"
             } else {
-              Write-Error "✗ ERROR: $file is missing"
+              Write-Output "[ERROR] $file is missing"
               exit 1
             }
           }
@@ -253,7 +254,8 @@ jobs:
           Write-Output "Creating archive..."
           Compress-Archive -Path cov-int -DestinationPath myproject.zip -Force
           $archiveSize = (Get-Item myproject.zip).Length
-          Write-Output "✓ Archive created: $([math]::Round($archiveSize/1MB, 2)) MB"
+          $archiveMB = [math]::Round($archiveSize/1MB, 2)
+          Write-Output "[OK] Archive created: $archiveMB MB"
 
     - name: Create Release and Submit to Coverity
       shell: powershell
@@ -287,7 +289,7 @@ jobs:
           Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $uploadHeaders -Body $fileBytes
           
           $downloadUrl = "https://github.com/${{ github.repository }}/releases/download/$tag/myproject.zip"
-          Write-Output "✓ Archive uploaded: $downloadUrl"
+          Write-Output "[OK] Archive uploaded: $downloadUrl"
           
           # Notify Coverity Scan
           Write-Output "Notifying Coverity Scan..."
@@ -300,10 +302,10 @@ jobs:
             description = "Automated Coverity Scan"
           }
           
-          Write-Output "✅ Coverity Scan submitted successfully!"
+          Write-Output "[SUCCESS] Coverity Scan submitted successfully!"
         }
         catch {
-          Write-Error "❌ Failed: $($_.Exception.Message)"
+          Write-Error "[FAILED] $($_.Exception.Message)"
           exit 1
         }
 
