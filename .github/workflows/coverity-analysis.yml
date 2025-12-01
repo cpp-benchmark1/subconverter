@@ -48,34 +48,73 @@ jobs:
             {
               if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
               
-              $httpClient = New-Object System.Net.Http.HttpClient
-              $httpClient.Timeout = New-TimeSpan -Minutes 30
+              # Use WebClient for compatibility with Windows PowerShell 5.1
+              $webClient = New-Object System.Net.WebClient
+              $webClient.Headers.Add("User-Agent", "GitHubActions-Coverity")
               
-              $multipartContent = New-Object System.Net.Http.MultipartFormDataContent
-              $multipartContent.Add([System.Net.Http.StringContent]::new($form.token), "token")
-              $multipartContent.Add([System.Net.Http.StringContent]::new($form.project), "project")
+              # Prepare multipart form data manually
+              $boundary = [System.Guid]::NewGuid().ToString()
+              $LF = "`r`n"
               
-              $response = $httpClient.PostAsync("https://scan.coverity.com/download/win64", $multipartContent).Result
-              $response.EnsureSuccessStatusCode()
+              $bodyLines = @()
+              $bodyLines += "--$boundary"
+              $bodyLines += "Content-Disposition: form-data; name=`"token`""
+              $bodyLines += ""
+              $bodyLines += $form.token
+              $bodyLines += "--$boundary"
+              $bodyLines += "Content-Disposition: form-data; name=`"project`""
+              $bodyLines += ""
+              $bodyLines += $form.project
+              $bodyLines += "--$boundary--"
+              $bodyLines += ""
               
-              $fileStream = [System.IO.File]::Create($zipPath)
-              $response.Content.CopyToAsync($fileStream).Wait()
-              $fileStream.Close()
+              $body = $bodyLines -join $LF
+              $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
               
-              $httpClient.Dispose()
+              $webClient.Headers.Add("Content-Type", "multipart/form-data; boundary=$boundary")
+              
+              Write-Output "Sending request to Coverity..."
+              $responseBytes = $webClient.UploadData("https://scan.coverity.com/download/win64", "POST", $bodyBytes)
+              
+              # Write response to file
+              [System.IO.File]::WriteAllBytes($zipPath, $responseBytes)
+              $webClient.Dispose()
+              
+              if (-not (Test-Path $zipPath)) {
+                throw "File not created after download"
+              }
               
               $fileSize = (Get-Item $zipPath).Length
               Write-Output "Downloaded file size: $fileSize bytes"
               
               if ($fileSize -lt 1000000) {
-                throw "Downloaded file is too small, likely an error page"
+                Write-Output "File seems small, checking if it's an error response..."
+                # Check if it's a text error message
+                try {
+                  $content = [System.Text.Encoding]::UTF8.GetString($responseBytes)
+                  if ($content -match "error|Error|ERROR|invalid|Invalid") {
+                    throw "Download returned error: $($content.Substring(0, [Math]::Min(200, $content.Length)))"
+                  }
+                } catch {
+                  # If we can't read as text, assume it's binary (zip file)
+                }
               }
               
+              # Validate zip file
               Add-Type -AssemblyName System.IO.Compression.FileSystem
               $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
               $entryCount = $zip.Entries.Count
-              $zip.Dispose()
               
+              if ($entryCount -eq 0) {
+                $zip.Dispose()
+                throw "Zip file is empty"
+              }
+              
+              # Verify first entry is readable
+              $firstEntry = $zip.Entries[0]
+              $null = $firstEntry.Name
+              
+              $zip.Dispose()
               Write-Output "Zip file validated with $entryCount entries"
               $downloadSuccess = $true
             }
