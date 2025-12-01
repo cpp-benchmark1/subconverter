@@ -4,3 +4,12 @@ cmake-build-debug
 .idea
 base/cache
 build.DS_Store
+
+# macOS system files
+.DS_Store
+*/.DS_Store
+
+# Coverity analysis artifacts
+cov-analysis-*/
+cov-int/
+myproject.zip
