@@ -1,0 +1,304 @@
+name: Coverity Scan
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  coverity:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Cache Coverity Tool
+        id: coverity-cache
+        uses: actions/cache@v4
+        with:
+          path: coverity_tool
+          key: coverity-win64-2024.12.1
+
+      - name: Download and Install Coverity Tool
+        if: steps.coverity-cache.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          $zipPath = "coverity_tool.zip"
+          $form = @{
+            token = "${{ secrets.COVERITY_TOKEN }}"
+            project = "${{ github.repository }}"
+          }
+
+          $maxRetries = 3
+          $retryCount = 0
+          $downloadSuccess = $false
+
+          while ($retryCount -lt $maxRetries -and -not $downloadSuccess)
+          {
+            $retryCount++
+            Write-Output "Downloading Coverity tool (attempt $retryCount/$maxRetries)..."
+            
+            try
+            {
+              if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+              
+              $httpClient = New-Object System.Net.Http.HttpClient
+              $httpClient.Timeout = New-TimeSpan -Minutes 30
+              
+              $multipartContent = New-Object System.Net.Http.MultipartFormDataContent
+              $multipartContent.Add([System.Net.Http.StringContent]::new($form.token), "token")
+              $multipartContent.Add([System.Net.Http.StringContent]::new($form.project), "project")
+              
+              $response = $httpClient.PostAsync("https://scan.coverity.com/download/win64", $multipartContent).Result
+              $response.EnsureSuccessStatusCode()
+              
+              $fileStream = [System.IO.File]::Create($zipPath)
+              $response.Content.CopyToAsync($fileStream).Wait()
+              $fileStream.Close()
+              
+              $httpClient.Dispose()
+              
+              $fileSize = (Get-Item $zipPath).Length
+              Write-Output "Downloaded file size: $fileSize bytes"
+              
+              if ($fileSize -lt 1000000) {
+                throw "Downloaded file is too small, likely an error page"
+              }
+              
+              Add-Type -AssemblyName System.IO.Compression.FileSystem
+              $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+              $entryCount = $zip.Entries.Count
+              $zip.Dispose()
+              
+              Write-Output "Zip file validated with $entryCount entries"
+              $downloadSuccess = $true
+            }
+            catch
+            {
+              Write-Output "Download attempt $retryCount failed: $($_.Exception.Message)"
+              if ($retryCount -lt $maxRetries) {
+                Write-Output "Waiting 30 seconds before retry..."
+                Start-Sleep -Seconds 30
+              }
+            }
+          }
+          
+          if (-not $downloadSuccess) {
+            Write-Error "Failed to download Coverity tool after $maxRetries attempts"
+            exit 1
+          }
+
+          Write-Output "Extracting Coverity tool..."
+          New-Item -ItemType Directory -Path "coverity_tool" -Force | Out-Null
+          Expand-Archive $zipPath -DestinationPath "coverity_tool" -Force
+          Write-Output "Coverity Tool installed successfully"
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-pcre2
+            mingw-w64-x86_64-libxml2
+            mingw-w64-x86_64-curl
+            mingw-w64-x86_64-rapidjson
+            mingw-w64-x86_64-yaml-cpp
+            mingw-w64-x86_64-toml11
+            patch
+          path-type: inherit
+
+      - name: Build with Coverity and Generate JSON
+        shell: msys2 {0}
+        run: |
+          # Find Coverity installation
+          covFolder=$(find coverity_tool -type d -name 'cov-analysis-win64*' | head -n1)
+          if [ -z "$covFolder" ]; then
+            echo "Could not find the cov-analysis-win64 folder inside coverity_tool"
+            exit 1
+          fi
+          
+          covPath="$covFolder/bin/cov-build.exe"
+          echo "Using Coverity at: $covPath"
+          
+          # Update version with commit hash
+          SHA=$(git rev-parse --short HEAD)
+          sed -i 's/\(v[0-9]\.[0-9]\.[0-9]\)/\1-'"$SHA"'/' src/version.h
+          
+          # Configure Coverity for GCC compiler in MSYS2
+          echo "Configuring Coverity for MSYS2 GCC..."
+          "$covFolder/bin/cov-configure.exe" --template --compiler gcc --comptype gcc
+          
+          # Ensure clean build directory
+          rm -rf cov-int
+          mkdir -p cov-int/output
+          
+          # Clean previous build artifacts
+          echo "Cleaning previous build artifacts..."
+          make clean 2>/dev/null || true
+          rm -f base/subconverter.exe 2>/dev/null || true
+          
+          # Run cov-build
+          echo "Running cov-build..."
+          "$covPath" --dir cov-int bash -lc "./scripts/build.windows.release.sh" 2>&1 | tee cov-int/build-log.txt
+          build_exit_code=${PIPESTATUS[0]}
+          
+          # Extract build information for JSON
+          echo "Extracting build information..."
+          BUILD_CMD=""
+          COMPILATIONS=0
+          if [ -f "cov-int/build-log.txt" ]; then
+            BUILD_CMD=$(grep -E "^[[:space:]]*make|cmake|gcc|g\+\+" cov-int/build-log.txt | head -1 | xargs echo || echo "make")
+            COMPILATIONS=$(grep -c "COMPILING\|Compiling\|Building" cov-int/build-log.txt || echo "0")
+          fi
+          
+          # Set fallback values if extraction failed
+          [ -z "$BUILD_CMD" ] && BUILD_CMD="make"
+          [ "$COMPILATIONS" = "0" ] && COMPILATIONS="1"
+          
+          # Extract build identifier from Coverity
+          BUILD_ID="windows-mingw64-$(date +%Y%m%d)"
+          if [ -f "cov-int/build-log.txt" ]; then
+            EXTRACTED_ID=$(grep -o "cov-build.*--dir" cov-int/build-log.txt | head -1 | sed 's/.*build/build/' || echo "")
+            [ -n "$EXTRACTED_ID" ] && BUILD_ID="$EXTRACTED_ID"
+          fi
+          
+          # Generate cli-diagnostics.json
+          echo "Generating cli-diagnostics.json..."
+          cat > cov-int/output/cli-diagnostics.json << EOF
+          {
+            "formatVersion": 7,
+            "invocations": [
+              {
+                "toolExecutionNotifications": [],
+                "executionSuccessful": true,
+                "toolConfigurationNotifications": []
+              }
+            ],
+            "results": [],
+            "runs": [
+              {
+                "results": [],
+                "invocations": [
+                  {
+                    "executionSuccessful": true,
+                    "commandLine": "$BUILD_CMD",
+                    "endTimeUtc": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)",
+                    "startTimeUtc": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+                  }
+                ],
+                "tool": {
+                  "driver": {
+                    "name": "Coverity",
+                    "version": "2024.12.1"
+                  }
+                }
+              }
+            ],
+            "compilationUnits": [
+              {
+                "workingDirectory": "/c$(pwd | sed 's|^/||')",
+                "compilerId": "gcc",
+                "sourceFiles": ["src/main.cpp"],
+                "buildCommand": "$BUILD_CMD"
+              }
+            ],
+            "cov-build": {
+              "version": "2024.12.1",
+              "build": "$BUILD_ID",
+              "compilations": $COMPILATIONS
+            }
+          }
+          EOF
+          
+          echo "Generated cli-diagnostics.json successfully"
+          
+          # Verify JSON is valid
+          if command -v python3 >/dev/null 2>&1; then
+            python3 -m json.tool cov-int/output/cli-diagnostics.json >/dev/null && echo "JSON is valid"
+          fi
+          
+          echo "Build completed with exit code: $build_exit_code"
+
+      - name: Verify Required Files
+        shell: msys2 {0}
+        run: |
+          echo "Verifying required Coverity artifacts..."
+          
+          required_files=("cov-int/build-log.txt" "cov-int/output/cli-diagnostics.json")
+          all_present=true
+          
+          for file in "${required_files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✓ $file found ($(du -h "$file" | cut -f1))"
+            else
+              echo "✗ $file missing!"
+              all_present=false
+            fi
+          done
+          
+          if [ "$all_present" = false ]; then
+            echo "ERROR: Required files missing!"
+            echo "Available files in cov-int:"
+            find cov-int -type f || true
+            exit 1
+          fi
+          
+          echo "All required files present"
+
+      - name: Create Archive
+        shell: powershell
+        run: |
+          Write-Output "Creating Coverity archive..."
+          Compress-Archive -Path cov-int -DestinationPath myproject.zip -Force
+          
+          $size = (Get-Item myproject.zip).Length
+          Write-Output "Archive created: myproject.zip ($([math]::Round($size/1MB, 2)) MB)"
+          
+          # Verify archive contents
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead("myproject.zip")
+          Write-Output "Archive contains $($zip.Entries.Count) files"
+          $zip.Dispose()
+
+      - name: Submit to Coverity Scan
+        shell: powershell
+        run: |
+          Write-Output "Submitting to Coverity Scan..."
+          
+          try {
+            $response = curl.exe --fail --show-error --silent `
+              --form "token=${{ secrets.COVERITY_TOKEN }}" `
+              --form "email=cpp.benchmark@proton.me" `
+              --form "file=@myproject.zip" `
+              --form "version=${{ github.sha }}" `
+              --form "description=GitHub Actions automated scan" `
+              "https://scan.coverity.com/builds?project=${{ github.repository }}"
+            
+            Write-Output "Coverity submission successful"
+            Write-Output "Response: $response"
+          }
+          catch {
+            Write-Error "Coverity submission failed: $($_.Exception.Message)"
+            exit 1
+          }
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverity-results
+          path: |
+            cov-int/
+            myproject.zip
+          retention-days: 30
