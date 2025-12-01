@@ -1,0 +1,66 @@
+name: Test Coverity Upload
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  test-upload:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Test Coverity Upload
+      shell: powershell
+      run: |
+        Write-Output "=== Testing Coverity Upload ==="
+        
+        # Check if file exists
+        if (Test-Path "myproject.zip") {
+          $fileSize = (Get-Item "myproject.zip").Length
+          Write-Output "Archive size: $([math]::Round($fileSize/1MB, 2)) MB"
+          
+          # Verify it's a valid zip
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          try {
+            $zip = [System.IO.Compression.ZipFile]::OpenRead("myproject.zip")
+            Write-Output "Archive is valid with $($zip.Entries.Count) entries"
+            $zip.Dispose()
+          } catch {
+            Write-Output "ERROR: Archive validation failed: $($_.Exception.Message)"
+            exit 1
+          }
+        } else {
+          Write-Output "ERROR: myproject.zip not found!"
+          exit 1
+        }
+        
+        Write-Output ""
+        Write-Output "=== Attempting Upload ==="
+        
+        # Test the actual upload with verbose output (remove -X POST as it's implied with -F)
+        Write-Output "Running curl command..."
+        curl.exe --verbose --show-error `
+          --form "token=${{ secrets.COVERITY_TOKEN }}" `
+          --form "email=cpp.benchmark@proton.me" `
+          --form "file=@myproject.zip" `
+          --form "version=test-${{ github.run_id }}" `
+          --form "description=GitHub Actions test upload" `
+          --url "https://scan.coverity.com/builds?project=${{ github.repository }}"
+        
+        $curlExitCode = $LASTEXITCODE
+        
+        Write-Output "========================"
+        Write-Output "Exit code: $curlExitCode"
+        
+        # Analyze the response
+        if ($curlExitCode -eq 0) {
+          Write-Output "[SUCCESS] Curl completed successfully!"
+        } else {
+          Write-Output "[WARNING] Curl returned exit code $curlExitCode"
+          Write-Output "This may indicate an issue with the upload"
+        }
