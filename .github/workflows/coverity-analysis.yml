@@ -298,48 +298,51 @@ jobs:
       - name: Create Archive
         shell: powershell
         run: |
-          Write-Output "Creating Coverity archive using .NET compression..."
+          Write-Output "Creating Coverity archive..."
           
-          # Use .NET ZipFile class for better compatibility
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          
-          if (Test-Path "cov-int.zip") { Remove-Item "cov-int.zip" -Force }
-          
-          # Create zip archive and add files from cov-int directory
-          $zipArchive = [System.IO.Compression.ZipFile]::Open("cov-int.zip", [System.IO.Compression.ZipArchiveMode]::Create)
-          
-          try {
-            # Get all files and directories in cov-int recursively
-            $sourceDir = "cov-int"
-            $files = Get-ChildItem -Path $sourceDir -Recurse -File
-            
-            foreach ($file in $files) {
-              # Calculate relative path from cov-int directory
-              $relativePath = $file.FullName.Substring($sourceDir.Length + 1).Replace('\', '/')
-              Write-Output "Adding: $relativePath"
-              
-              # Create zip entry and copy file content
-              $zipEntry = $zipArchive.CreateEntry($relativePath)
-              $zipEntryStream = $zipEntry.Open()
-              $fileStream = [System.IO.File]::OpenRead($file.FullName)
-              
-              try {
-                $fileStream.CopyTo($zipEntryStream)
-              }
-              finally {
-                $fileStream.Close()
-                $zipEntryStream.Close()
-              }
-            }
+          # Use 7zip if available, otherwise use tar (more reliable than PowerShell Compress-Archive)
+          if (Get-Command 7z -ErrorAction SilentlyContinue) {
+            Write-Output "Using 7zip for compression..."
+            cd cov-int
+            7z a -tzip ..\cov-int.zip *
+            cd ..
           }
-          finally {
-            $zipArchive.Dispose()
+          elseif (Get-Command tar -ErrorAction SilentlyContinue) {
+            Write-Output "Using tar for compression..."
+            cd cov-int
+            tar -af ..\cov-int.zip *
+            cd ..
+          }
+          else {
+            Write-Output "Using .NET ZipFile with CreateFromDirectory..."
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            
+            if (Test-Path "cov-int.zip") { Remove-Item "cov-int.zip" -Force }
+            
+            # Create temporary directory with cov-int contents at root level
+            $tempDir = "temp-zip-$([System.Guid]::NewGuid().ToString().Substring(0,8))"
+            New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+            
+            # Copy all files from cov-int to temp directory maintaining structure
+            Copy-Item -Path "cov-int\*" -Destination $tempDir -Recurse -Force
+            
+            # Create zip from temp directory
+            [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, "cov-int.zip")
+            
+            # Clean up temp directory
+            Remove-Item -Path $tempDir -Recurse -Force
+          }
+          
+          if (-not (Test-Path "cov-int.zip")) {
+            Write-Error "Failed to create cov-int.zip"
+            exit 1
           }
           
           $size = (Get-Item cov-int.zip).Length
           Write-Output "Archive created: cov-int.zip ($([math]::Round($size/1MB, 2)) MB)"
           
           # Verify archive contents
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [System.IO.Compression.ZipFile]::OpenRead("cov-int.zip")
           Write-Output "Archive contains $($zip.Entries.Count) files:"
           $zip.Entries | ForEach-Object { Write-Output "  $($_.FullName)" }
