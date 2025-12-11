@@ -303,18 +303,18 @@ jobs:
           # Change to cov-int directory and compress its contents, not the folder itself
           Push-Location cov-int
           try {
-            Compress-Archive -Path * -DestinationPath ..\myproject.zip -Force
+            Compress-Archive -Path * -DestinationPath ..\cov-int.zip -Force
           }
           finally {
             Pop-Location
           }
           
-          $size = (Get-Item myproject.zip).Length
-          Write-Output "Archive created: myproject.zip ($([math]::Round($size/1MB, 2)) MB)"
+          $size = (Get-Item cov-int.zip).Length
+          Write-Output "Archive created: cov-int.zip ($([math]::Round($size/1MB, 2)) MB)"
           
           # Verify archive contents - should show files directly, not nested in cov-int folder
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = [System.IO.Compression.ZipFile]::OpenRead("myproject.zip")
+          $zip = [System.IO.Compression.ZipFile]::OpenRead("cov-int.zip")
           Write-Output "Archive contains $($zip.Entries.Count) files:"
           $zip.Entries | ForEach-Object { Write-Output "  $($_.FullName)" }
           $zip.Dispose()
@@ -328,7 +328,7 @@ jobs:
             $response = curl.exe --fail --show-error --silent `
               --form "token=${{ secrets.COVERITY_TOKEN }}" `
               --form "email=cpp.benchmark@proton.me" `
-              --form "file=@myproject.zip" `
+              --form "file=@cov-int.zip" `
               --form "version=${{ github.sha }}" `
               --form "description=GitHub Actions automated scan" `
               "https://scan.coverity.com/builds?project=${{ github.repository }}"
@@ -348,5 +348,5 @@ jobs:
           name: coverity-results
           path: |
             cov-int/
-            myproject.zip
+            cov-int.zip
           retention-days: 30
