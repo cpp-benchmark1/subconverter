@@ -1,4 +1,4 @@
-FROM alpine:3.16 AS builder
+FROM alpine:3.22.0 AS builder
 LABEL maintainer="tindy.it@gmail.com"
 ARG THREADS="4"
 ARG SHA=""
@@ -45,7 +45,7 @@ RUN set -xe && \
     make -j $THREADS
 
 # build final image
-FROM alpine:3.16
+FROM alpine:3.22.0
 LABEL maintainer="tindy.it@gmail.com"
 
 RUN apk add --no-cache --virtual subconverter-deps pcre2 libcurl yaml-cpp
